@@ -1,5 +1,5 @@
-import 'dart:io';
+import 'package:popshop/response/response.dart';
 
 abstract class Respondable {
-  Future<HttpResponse> toHttpResponse();
+  Future<Response> processResponse();
 }

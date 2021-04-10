@@ -8,11 +8,7 @@ class Response implements Respondable {
   dynamic body;
 
   @override
-  Future<HttpResponse> toHttpResponse() {
-    var resp = HttpResponse();
-    resp.headers = headers;
-    resp.statusCode = statusCode;
-    
-    return Future.value(resp);
+  Future<Response> processResponse() {
+    return Future.value(this);
   }
 }
