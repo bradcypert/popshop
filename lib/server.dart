@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:popshop/request_respondable_pair.dart';
+import 'package:popshop/response/respondable.dart';
+import 'package:popshop/response/response.dart';
 
 class Server {
 
   var port = 7777;
-  RequestRespondablePair[] bindings = [];
+  List<RequestRespondablePair> bindings = [];
 
   Future serveHTTP() async {
     var server = await HttpServer.bind(
@@ -18,7 +20,9 @@ class Server {
     await for (HttpRequest request in server) {
       var hasMatch = false;
       for (var i = 0; i < bindings.length; i++) {
-      hasMatch = request.uri.path.endsWith(bindings[i]);
+      hasMatch = request.uri.path.endsWith(bindings[i].request.path);
+
+      var response = bindings[i].respondable;
 
       if (hasMatch) {
           _renderResponse(request, response);
@@ -34,8 +38,8 @@ class Server {
     }
   }
 
-  void _renderResponse(HttpRequest request, Response response) {
-    request.response.write(response.body);
+  void _renderResponse(HttpRequest request, Respondable response) async {
+    request.response.write(await response.processResponse());
   }
 
 }
