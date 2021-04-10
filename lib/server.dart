@@ -39,7 +39,8 @@ class Server {
   }
 
   void _renderResponse(HttpRequest request, Respondable response) async {
-    request.response.write(await response.processResponse());
+    var res = await response.processResponse();
+    request.response.write(res.body);
   }
 
 }

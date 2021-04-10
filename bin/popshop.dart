@@ -1,5 +1,6 @@
-import 'package:popshop/popshop.dart' as popshop;
+import 'package:popshop/server.dart' as popshop;
 
-void main(List<String> arguments) {
-  print('Hello world: ${popshop.calculate()}!');
+void main(List<String> arguments) async {
+  var server = popshop.Server();
+  await server.serveHTTP();
 }
