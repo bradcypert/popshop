@@ -1,5 +1,20 @@
-A sample command-line application with an entrypoint in `bin/`, library code
-in `lib/`, and example unit test in `test/`.
+# Pop(up)Shop
+## A replacement for that API that just isn't quite ready yet.
 
-Created from templates made available by Stagehand under a BSD-style
-[license](https://github.com/dart-lang/stagehand/blob/master/LICENSE).
+PopShop lets you define YAML files for incoming requests and responses.
+
+```yml
+---
+request:
+  path: "/users/1"
+  verb: get
+response:
+  body: '{"id": 1, "name": "Brad"}'
+  status: 200
+```
+
+PopShop parses these yaml files and spins up a simple HTTP server that, in this case, would return `{"id": 1, "name": "Brad"}` when you send a GET request to `/users/1`.
+
+Eventually PopShop will support proxying to actual servers as well. This is useful in a scenario where you might originally use PopShop to mock several API endpoints,
+but some of those eventually become available to leverage, but some may also still not be. This allows you to route all requests through PopShop and have it act as a proxy
+for certain requests, but still mock the responses that the underlying APIs might not be ready to handle.
