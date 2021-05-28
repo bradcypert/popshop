@@ -1,0 +1,7 @@
+---
+request:
+  path: "/users/1"
+  verb: get
+response:
+  body: '{"id": 1, "name": "Brad"}'
+  status: 200

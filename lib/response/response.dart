@@ -7,6 +7,8 @@ class Response implements Respondable {
   Map<String, dynamic>? headers;
   dynamic body;
 
+  Response({this.statusCode = 200, this.headers, this.body});
+
   @override
   Future<Response> processResponse() {
     return Future.value(this);

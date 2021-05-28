@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:popshop/request_respondable_pair.dart';
 import 'package:popshop/response/respondable.dart';
 import 'package:popshop/response/response.dart';
+import 'package:popshop/config/yaml_reader.dart';
+import 'package:popshop/request_respondable_pair_generator.dart';
 
 class Server {
 
@@ -15,17 +17,28 @@ class Server {
       port,
     );
 
+    bindings = Directory('.')
+      .listSync(recursive: true)
+      .map((e) => File(e.path))
+      .where((file) => file.path.endsWith('.yml'))
+      .map((file) => YamlReader(file: file)..read())
+      .map((yamlReader) => yamlReader.parsed)
+      .map((contents) => RequestRespondablePairGenerator.generateFromMap(contents))
+      .toList();
+
     print('Bound server to port $port');
 
     await for (HttpRequest request in server) {
+      print(request.uri.path);
       var hasMatch = false;
       for (var i = 0; i < bindings.length; i++) {
-      hasMatch = request.uri.path.endsWith(bindings[i].request.path);
+        print(bindings[i].request.path);
+        hasMatch = request.uri.path == bindings[i].request.path;
 
-      var response = bindings[i].respondable;
+        var response = bindings[i].respondable;
 
-      if (hasMatch) {
-          _renderResponse(request, response);
+        if (hasMatch) {
+          await _renderResponse(request, response);
           break;
         }
       }
@@ -38,9 +51,10 @@ class Server {
     }
   }
 
-  void _renderResponse(HttpRequest request, Respondable response) async {
+  Future _renderResponse(HttpRequest request, Respondable response) async {
     var res = await response.processResponse();
-    request.response.write(res.body);
+    request.response.statusCode = res.statusCode;
+    return request.response.write(res.body);
   }
 
 }
