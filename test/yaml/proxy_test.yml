@@ -1,0 +1,7 @@
+---
+request:
+  path: "/readme"
+  verb: get
+proxy:
+  url: https://raw.githubusercontent.com/PyreStudios/popshop/main/README.md
+  verb: get

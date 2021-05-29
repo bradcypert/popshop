@@ -29,12 +29,9 @@ class Server {
     print('Bound server to port $port');
 
     await for (HttpRequest request in server) {
-      print(request.uri.path);
       var hasMatch = false;
       for (var i = 0; i < bindings.length; i++) {
-        print(bindings[i].request.path);
         hasMatch = request.uri.path == bindings[i].request.path;
-
         var response = bindings[i].respondable;
 
         if (hasMatch) {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:popshop/response/respondable.dart';
 import 'package:popshop/response/response.dart';
@@ -15,11 +16,12 @@ class Proxy implements Respondable {
 
     // this should work for gets, but we'll need to handle other verbs, too.
     return HttpClient()
-      .getUrl(Uri.parse(url))
+      .openUrl(verb, Uri.parse(url))
       .then((request) => request.close())
-      .then((response) {
+      .then((response) async {
         // do stuff here.
-        return Response();
+        var data = await response.transform(utf8.decoder).first;
+        return Response(statusCode: 200, headers: {}, body: data);
       });
   }
 }

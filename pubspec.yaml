@@ -1,7 +1,7 @@
 name: popshop
-description: A sample command-line application.
-# version: 1.0.0
-# homepage: https://www.example.com
+description: Stub, Mock and Proxy calls through Popshop
+version: 0.0.1
+homepage: https://github.com/PyreStudios/popshop
 
 environment:
   sdk: '>=2.12.0 <3.0.0'
