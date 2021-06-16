@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:popshop/config/config_finder.dart';
 import 'package:popshop/request_respondable_pair.dart';
 import 'package:popshop/response/respondable.dart';
 import 'package:popshop/response/response.dart';
@@ -17,15 +18,7 @@ class Server {
       port,
     );
 
-    bindings = Directory('.')
-      .listSync(recursive: true)
-      .map((e) => File(e.path))
-      .where((file) => file.path.endsWith('.yml'))
-      .map((file) => YamlReader(file: file)..read())
-      .map((yamlReader) => yamlReader.parsed)
-      .map((contents) => RequestRespondablePairGenerator.generateFromMap(contents))
-      .toList();
-
+    bindings = ConfigFinder.generateConfigsFrom(directory: Directory('.'));
     print('Bound server to port $port');
 
     await for (HttpRequest request in server) {
