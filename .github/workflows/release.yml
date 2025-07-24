@@ -14,7 +14,7 @@ jobs:
       image:  google/dart:latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Build project
         run: |
           dart pub get && dart compile exe ./bin/popshop.dart
