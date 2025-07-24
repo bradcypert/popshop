@@ -1,0 +1,34 @@
+# Health and Status Endpoints
+- request:
+    path: "/health"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"status": "healthy", "uptime": "24h", "version": "0.1.0"}'
+    headers:
+      content-type: "application/json"
+
+- request:
+    path: "/metrics"
+    method: "GET"
+  response:
+    status: 200
+    body: |
+      # TYPE requests_total counter
+      requests_total{method="GET"} 1337
+      requests_total{method="POST"} 42
+      # TYPE response_time_seconds histogram
+      response_time_seconds_bucket{le="0.1"} 100
+      response_time_seconds_bucket{le="0.5"} 150
+      response_time_seconds_bucket{le="+Inf"} 200
+    headers:
+      content-type: "text/plain"
+
+- request:
+    path: "/ready"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"ready": true, "dependencies": {"database": "ok", "redis": "ok"}}'
+    headers:
+      content-type: "application/json"

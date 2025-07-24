@@ -1,0 +1,22 @@
+.{
+    .name = "popshop",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.13.0",
+
+    .dependencies = .{
+        .httpz = .{
+            .url = "https://github.com/karlseguin/http.zig/archive/v0.13.tar.gz",
+            .hash = "1220b3e0a2598e006cba8c2d5f3e0cf12b44e59e1b0b67f1e0cc0b4f0d1e1d3b7e8d",
+        },
+        .@"zig-yaml" = .{
+            .url = "https://github.com/kubkon/zig-yaml/archive/main.tar.gz",
+            .hash = "1220b3e0a2598e006cba8c2d5f3e0cf12b44e59e1b0b67f1e0cc0b4f0d1e1d3b7e8d",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

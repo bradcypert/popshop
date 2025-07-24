@@ -1,0 +1,10 @@
+# Simple PopShop configuration example
+- request:
+    path: "/api/health"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"status": "ok", "service": "popshop", "timestamp": "2025-01-24T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+      x-service: "popshop"

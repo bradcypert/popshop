@@ -1,0 +1,52 @@
+# Authentication and Authorization Endpoints
+- request:
+    path: "/auth/login"
+    method: "POST"
+  response:
+    status: 200
+    body: '{"token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...", "expires_in": 3600, "user": {"id": 1, "name": "Alice", "role": "admin"}}'
+    headers:
+      content-type: "application/json"
+      set-cookie: "session=abc123; Path=/; HttpOnly; Secure"
+
+- request:
+    path: "/auth/refresh"
+    method: "POST"
+  response:
+    status: 200
+    body: '{"token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...", "expires_in": 3600}'
+    headers:
+      content-type: "application/json"
+
+- request:
+    path: "/auth/logout"
+    method: "POST"
+  response:
+    status: 200
+    body: '{"message": "Logged out successfully"}'
+    headers:
+      content-type: "application/json"
+      set-cookie: "session=; Path=/; HttpOnly; Secure; Max-Age=0"
+
+# Protected endpoint that requires valid auth header
+- request:
+    path: "/api/protected"
+    method: "GET"
+    headers:
+      authorization: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+  response:
+    status: 200
+    body: '{"message": "Access granted", "user_id": 1, "permissions": ["read", "write"]}'
+    headers:
+      content-type: "application/json"
+
+# Unauthorized access
+- request:
+    path: "/api/protected"
+    method: "GET"
+  response:
+    status: 401
+    body: '{"error": "Unauthorized", "message": "Missing or invalid authorization header"}'
+    headers:
+      content-type: "application/json"
+      www-authenticate: "Bearer realm=\"api\""

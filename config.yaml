@@ -1,0 +1,93 @@
+# PopShop Configuration Example
+# This file demonstrates the YAML configuration format for PopShop
+
+# Basic health check endpoint
+- request:
+    path: "/health"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"status": "healthy", "service": "popshop", "version": "0.1.0"}'
+    headers:
+      content-type: "application/json"
+      x-service: "popshop"
+
+# Users API - Mock responses
+- request:
+    path: "/api/users"
+    method: "GET"
+  response:
+    status: 200
+    body: |
+      [
+        {"id": 1, "name": "Alice", "email": "alice@example.com"},
+        {"id": 2, "name": "Bob", "email": "bob@example.com"},
+        {"id": 3, "name": "Charlie", "email": "charlie@example.com"}
+      ]
+    headers:
+      content-type: "application/json"
+
+- request:
+    path: "/api/users"
+    method: "POST"
+  response:
+    status: 201
+    body: '{"id": 4, "name": "New User", "email": "newuser@example.com", "created": true}'
+    headers:
+      content-type: "application/json"
+      location: "/api/users/4"
+
+# Proxy to external service
+- request:
+    path: "/api/external/weather"
+    method: "GET"
+  proxy:
+    url: "https://api.openweathermap.org/data/2.5/weather"
+    timeout_ms: 5000
+    headers:
+      x-forwarded-by: "popshop"
+      user-agent: "PopShop-Proxy/0.1.0"
+
+# Conditional response based on headers
+- request:
+    path: "/api/protected"
+    method: "GET"
+    headers:
+      authorization: "Bearer valid-token"
+  response:
+    status: 200
+    body: '{"message": "Access granted", "user": "authenticated"}'
+    headers:
+      content-type: "application/json"
+
+# Error response for missing auth
+- request:
+    path: "/api/protected"
+    method: "GET"
+  response:
+    status: 401
+    body: '{"error": "Unauthorized", "message": "Missing or invalid authorization header"}'
+    headers:
+      content-type: "application/json"
+      www-authenticate: "Bearer"
+
+# File upload endpoint
+- request:
+    path: "/api/upload"
+    method: "POST"
+  response:
+    status: 200
+    body: '{"message": "File uploaded successfully", "file_id": "abc123"}'
+    headers:
+      content-type: "application/json"
+
+# Proxy with custom headers
+- request:
+    path: "/api/github"
+    method: "GET"
+  proxy:
+    url: "https://api.github.com/user"
+    timeout_ms: 10000
+    headers:
+      authorization: "token YOUR_GITHUB_TOKEN"
+      user-agent: "PopShop-GitHub-Proxy"

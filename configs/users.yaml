@@ -1,0 +1,46 @@
+# User Management API
+- request:
+    path: "/api/users"
+    method: "GET"
+  response:
+    status: 200
+    body: |
+      {
+        "users": [
+          {"id": 1, "name": "Alice Johnson", "email": "alice@company.com", "role": "admin"},
+          {"id": 2, "name": "Bob Smith", "email": "bob@company.com", "role": "user"},
+          {"id": 3, "name": "Charlie Brown", "email": "charlie@company.com", "role": "user"}
+        ],
+        "total": 3,
+        "page": 1,
+        "per_page": 10
+      }
+    headers:
+      content-type: "application/json"
+      x-total-count: "3"
+
+- request:
+    path: "/api/users"
+    method: "POST"
+  response:
+    status: 201
+    body: '{"id": 4, "name": "New User", "email": "newuser@company.com", "role": "user", "created_at": "2025-01-24T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+      location: "/api/users/4"
+
+- request:
+    path: "/api/users/1"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"id": 1, "name": "Alice Johnson", "email": "alice@company.com", "role": "admin", "created_at": "2024-01-01T00:00:00Z", "last_login": "2025-01-24T09:30:00Z"}'
+    headers:
+      content-type: "application/json"
+
+- request:
+    path: "/api/users/1"
+    method: "DELETE"
+  response:
+    status: 204
+    body: ""

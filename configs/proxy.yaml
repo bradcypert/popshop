@@ -1,0 +1,40 @@
+# Proxy Configuration Examples
+- request:
+    path: "/api/github/user"
+    method: "GET"
+  proxy:
+    url: "https://api.github.com/user"
+    timeout_ms: 10000
+    headers:
+      user-agent: "PopShop-Proxy/0.1.0"
+      x-forwarded-by: "popshop"
+
+- request:
+    path: "/api/httpbin/get"
+    method: "GET"
+  proxy:
+    url: "https://httpbin.org/get"
+    timeout_ms: 5000
+    headers:
+      x-proxy-service: "popshop"
+
+- request:
+    path: "/api/httpbin/post"
+    method: "POST"
+  proxy:
+    url: "https://httpbin.org/post"
+    timeout_ms: 15000
+    headers:
+      x-proxy-service: "popshop"
+      content-type: "application/json"
+
+# Proxy with authentication passthrough
+- request:
+    path: "/api/external/protected"
+    method: "GET"
+  proxy:
+    url: "https://api.external-service.com/protected"
+    timeout_ms: 8000
+    headers:
+      x-api-key: "your-api-key-here"
+      x-forwarded-by: "popshop"

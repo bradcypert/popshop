@@ -1,53 +1,26 @@
 [tools]
-dart = "3.8.2"
-
-[env]
-# Ensure Dart binaries are in PATH
-PATH = "{{config_root}}/.mise/installs/dart/3.8.2/bin:$PATH"
-
-[tasks.deps]
-description = "Install Dart dependencies"
-run = "dart pub get"
-
-[tasks.test]
-description = "Run all tests"
-run = "dart test"
-
-[tasks.test-coverage]
-description = "Run tests with coverage"
-run = [
-  "dart pub global activate coverage 1.2.0",
-  "dart test --coverage=coverage",
-  "dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info"
-]
-
-[tasks.analyze]
-description = "Analyze Dart code"
-run = "dart analyze"
-
-[tasks.format]
-description = "Format Dart code"
-run = "dart format ."
-
-[tasks.fix]
-description = "Apply automated fixes"
-run = "dart fix --apply"
+zig = "0.13.0"
 
 [tasks.build]
-description = "Build version information"
-run = "dart run build_runner build"
-
-[tasks.verify]
-description = "Verify build"
-run = "dart run build_verify"
+description = "Build the project"
+run = "zig build"
 
 [tasks.run]
 description = "Run the CLI"
-run = "dart run bin/popshop.dart"
+run = "zig build run"
+
+[tasks.test]
+description = "Run all tests"
+run = "zig build test"
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "rm -rf zig-cache zig-out"
 
 [tasks.dev]
-description = "Development setup - install dependencies and build"
-run = [
-  "dart pub get",
-  "dart run build_runner build"
-]
+description = "Development setup - build and test"
+run = ["zig build", "zig build test"]
+
+[tasks.fmt]
+description = "Format Zig code"
+run = "zig fmt src/"

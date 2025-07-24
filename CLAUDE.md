@@ -4,35 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Popshop is a Dart CLI application built using Very Good CLI template. It follows a command-based architecture with a main command runner that handles subcommands like `serve` and `update`.
+Popshop is a high-performance HTTP mocking and proxy server built with Zig. It features clean architecture with swappable HTTP server implementations, arena allocators for zero-copy request handling, and comprehensive security features. The CLI supports serving mock responses and proxying requests based on YAML configuration files.
 
 ## Development Environment
 
-This project uses `mise` for environment management with Dart SDK 3.8.2. The configuration is defined in `.mise.toml`.
+This project uses `mise` for environment management with Zig 0.13.0. The configuration is defined in `.mise.toml`.
 
 ### Initial Setup
 ```bash
 # Trust the mise configuration (first time only)
 mise trust
 
-# Install tools (Dart SDK)
+# Install tools (Zig)
 mise install
 
-# Install dependencies and build
+# Build and test the project
 mise run dev
 ```
 
-### Using Dart Commands
+### Using Zig Commands
 ```bash
-# Option 1: Use mise tasks (recommended)
-mise run deps      # dart pub get
-mise run test      # dart test
-mise run analyze   # dart analyze
+# Use mise tasks (recommended)
+mise run build     # zig build
+mise run test      # zig build test
+mise run fmt       # zig fmt src/
+mise run clean     # clean build artifacts
 
-# Option 2: Direct execution through mise
-mise exec -- dart <command>
-mise exec -- dart pub get
-mise exec -- dart test
+# Direct execution through mise
+mise exec -- zig build
+mise exec -- zig build test
+mise exec -- zig build run
 ```
 
 ## Available Mise Tasks
@@ -41,80 +42,81 @@ The project includes predefined mise tasks for common operations:
 
 ### Development Tasks
 ```bash
-mise run dev           # Install dependencies and build (setup)
-mise run deps          # Install Dart dependencies (dart pub get)
-mise run build         # Build version information (dart run build_runner build)
-mise run verify        # Verify build (dart run build_verify)
-```
-
-### Testing Tasks
-```bash
-mise run test          # Run all tests
-mise run test-coverage # Run tests with coverage report
+mise run dev           # Build and test (development workflow)
+mise run build         # Build the project (zig build)
+mise run test          # Run all tests (zig build test)
+mise run clean         # Clean build artifacts
 ```
 
 ### Code Quality Tasks
 ```bash
-mise run analyze       # Analyze Dart code
-mise run format        # Format Dart code
-mise run fix          # Apply automated fixes
+mise run fmt           # Format Zig code (zig fmt src/)
 ```
 
 ### Running the CLI
 ```bash
-mise run run          # Run the CLI (dart run bin/popshop.dart)
+mise run run          # Run the CLI (zig build run)
 
-# Or with arguments using mise exec:
-mise exec -- dart run bin/popshop.dart serve
-mise exec -- dart run bin/popshop.dart serve --port 8080
-mise exec -- dart run bin/popshop.dart --version
-mise exec -- dart run bin/popshop.dart --help
+# Or with arguments using zig build:
+zig build run -- serve config.yaml
+zig build run -- serve config.yaml --port 8080 --watch
+zig build run -- validate config.yaml
+zig build run -- version
+zig build run -- help
 ```
 
 ### Manual Commands (when needed)
 ```bash
-# Generate and view coverage report (after test-coverage)
-genhtml coverage/lcov.info -o coverage/
-open coverage/index.html
+# Build specific target
+zig build -Dtarget=x86_64-linux-gnu
 
-# Run single test file
-mise exec -- dart test test/src/commands/serve_command_test.dart
+# Run with specific allocator
+zig build run -Dallocator=gpa
 
-# Check dependencies
-mise exec -- dart pub deps
+# Debug build
+zig build -Doptimize=Debug
 ```
 
 ## Architecture
 
 ### Core Structure
-- `bin/popshop.dart` - Entry point that creates and runs PopshopCommandRunner
-- `lib/src/command_runner.dart` - Main CommandRunner with logging, version checking, and command registration
-- `lib/src/commands/` - Individual command implementations
-- `lib/src/version.dart` - Auto-generated version file
+- `src/main.zig` - Entry point that initializes CLI and runs commands
+- `src/cli.zig` - Command-line interface with argument parsing
+- `src/app.zig` - Core application logic and request handling
+- `src/config.zig` - YAML configuration parsing and validation
+- `src/matcher.zig` - Request matching engine with pattern support
+- `src/proxy.zig` - HTTP proxy client with security validations
+- `src/http/` - HTTP server abstraction layer
 
-### Command System
-The CLI uses the `args` package CommandRunner pattern:
-- Commands extend `Command<int>` and return exit codes
-- Commands are registered in PopshopCommandRunner constructor
-- Built-in support for completion, logging levels, and update checking
+### Clean Architecture Design
+The project follows dependency inversion principles:
+- **Interfaces**: `src/http/interfaces.zig` defines HTTP server contracts
+- **Implementations**: `src/http/httpz_server.zig` provides httpz-based server
+- **Core Logic**: Application code depends only on interfaces, not implementations
+- **Swappable Servers**: Easy to replace httpz with std.http or custom implementations
 
-### Key Dependencies
-- `args` - Command-line argument parsing
-- `cli_completion` - Shell completion support  
-- `mason_logger` - Structured logging with color support
-- `pub_updater` - Automatic update checking
-- `very_good_analysis` - Dart linting rules
+### Key Features
+- **Arena Allocators**: Each HTTP request gets its own arena, automatically cleaned up
+- **Zero-Copy**: Minimal memory allocations and copying during request processing
+- **Security**: SSRF protection, rate limiting, request size limits
+- **Pattern Matching**: Support for wildcards and path parameters in routes
+- **Hot Reload**: Configuration file watching with debounced reloading
+
+### Dependencies
+- **httpz**: High-performance HTTP server library
+- **zig-yaml**: YAML parsing for configuration files
+- **Zig stdlib**: All core functionality uses only standard library
 
 ### Testing
-- Uses standard Dart `test` package
-- `mocktail` for mocking
-- Tests mirror the lib structure in `test/src/`
-- Build verification with `build_verify`
+- Uses Zig's built-in test framework
+- Tests are embedded in source files with `test` blocks
+- Run tests with `zig build test` or `mise run test`
 
 ## Development Notes
 
-- The project uses Very Good Analysis for linting with `public_member_api_docs: false`
-- Version information is auto-generated by build_runner
-- Update checking is built-in and runs after most commands
-- CLI supports verbose logging with `--verbose` flag
-- All commands should return proper exit codes for shell integration
+- The project uses Zig 0.13.0 with standard formatting (`zig fmt`)
+- Clean architecture allows easy swapping of HTTP server implementations
+- Arena allocators ensure memory safety and automatic cleanup
+- All HTTP operations are designed for high performance with minimal allocations
+- CLI follows standard Unix conventions for arguments and exit codes
+- Security features include SSRF protection and comprehensive input validation
