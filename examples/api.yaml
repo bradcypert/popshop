@@ -1,0 +1,32 @@
+# Multiple rules in a single file
+---
+- request:
+    path: "/api/health"
+    verb: get
+  response:
+    body: '{"status": "ok", "timestamp": "2025-01-24T10:00:00Z"}'
+    status: 200
+
+- request:
+    path: "/api/users"
+    verb: get
+  response:
+    body: '[{"id": 1, "name": "Brad"}, {"id": 2, "name": "Alice"}]'
+    status: 200
+    headers:
+      content-type: "application/json"
+
+- request:
+    path: "/api/users"
+    verb: post
+  response:
+    body: '{"id": 3, "name": "New User", "created": true}'
+    status: 201
+
+- request:
+    path: "/api/external"
+    verb: get
+  proxy:
+    url: https://httpbin.org/get
+    headers:
+      x-forwarded-by: "popshop"
