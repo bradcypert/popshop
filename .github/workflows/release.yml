@@ -1,40 +1,137 @@
+name: Release
+
 on:
   push:
-    # Sequence of patterns matched against refs/tags
     tags:
-    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
-
-name: Upload Release Asset
+      - 'v*'
 
 jobs:
   build:
-    name: Upload Release Asset
+    name: Build and Release
     runs-on: ubuntu-latest
-    container:
-      image:  google/dart:latest
+    
+    strategy:
+      matrix:
+        target:
+          - x86_64-linux-gnu
+          - x86_64-macos-none
+          - x86_64-windows-gnu
+          - aarch64-linux-gnu
+          - aarch64-macos-none
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Build project
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: "0.14.0"
+
+      - name: Build for target
         run: |
-          dart pub get && dart compile exe ./bin/popshop.dart
+          zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+          
+          # Set binary name based on target
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            BINARY_NAME="popshop.exe"
+          else
+            BINARY_NAME="popshop"
+          fi
+          
+          # Create release directory
+          mkdir -p release
+          
+          # Copy binary with target-specific name
+          cp zig-out/bin/$BINARY_NAME release/popshop-${{ matrix.target }}$([ "${{ matrix.target }}" == *"windows"* ] && echo ".exe" || echo "")
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: popshop-${{ matrix.target }}
+          path: release/
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Package each target
+          for target_dir in artifacts/popshop-*; do
+            target=$(basename "$target_dir" | sed 's/^popshop-//')
+            
+            cd "$target_dir"
+            if [[ "$target" == *"windows"* ]]; then
+              zip -r "../../release-assets/popshop-${target}.zip" .
+            else
+              tar -czf "../../release-assets/popshop-${target}.tar.gz" .
+            fi
+            cd - > /dev/null
+          done
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
+          release_name: PopShop ${{ github.ref_name }}
           draft: false
           prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./bin/popshop.exe
-          asset_name: popshop.exe
-          asset_content_type: application/vnd.microsoft.portable-executable
+          body: |
+            # PopShop ${{ github.ref_name }}
+            
+            High-performance HTTP mocking and proxy server built with Zig.
+            
+            ## Installation
+            
+            Download the appropriate binary for your platform:
+            
+            - **Linux x64**: `popshop-x86_64-linux-gnu.tar.gz`
+            - **Linux ARM64**: `popshop-aarch64-linux-gnu.tar.gz`
+            - **macOS x64**: `popshop-x86_64-macos-none.tar.gz`
+            - **macOS ARM64**: `popshop-aarch64-macos-none.tar.gz`
+            - **Windows x64**: `popshop-x86_64-windows-gnu.zip`
+            
+            ## Usage
+            
+            ```bash
+            # Start server with config file
+            ./popshop serve config.yaml
+            
+            # Start with file watching on custom port
+            ./popshop serve config.yaml --port 3000 --watch
+            
+            # Validate configuration
+            ./popshop validate config.yaml
+            ```
+            
+            See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for full documentation.
+
+      - name: Upload Release Assets
+        run: |
+          for asset in release-assets/*; do
+            asset_name=$(basename "$asset")
+            echo "Uploading $asset_name"
+            
+            curl \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$asset" \
+              "${{ steps.create_release.outputs.upload_url }}?name=$asset_name"
+          done
