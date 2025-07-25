@@ -16,7 +16,7 @@ pub const RequestMatcher = struct {
 
     /// Find the first rule that matches the given request
     pub fn findMatchingRule(self: *RequestMatcher, request: *const Request, rules: []const Rule) ?*const Rule {
-        _ = self; // RequestMatcher might need allocator for future regex support
+        // RequestMatcher might need allocator for future regex support
         
         for (rules) |*rule| {
             if (self.doesRuleMatch(request, rule)) {
@@ -132,8 +132,8 @@ pub const PathMatcher = struct {
         errdefer match.deinit();
 
         // Split paths into segments
-        var request_segments = std.mem.split(u8, request_path, "/");
-        var rule_segments = std.mem.split(u8, rule_path, "/");
+        var request_segments = std.mem.splitScalar(u8, request_path, '/');
+        var rule_segments = std.mem.splitScalar(u8, rule_path, '/');
 
         while (true) {
             const req_segment = request_segments.next();
@@ -275,8 +275,9 @@ test "PathMatcher.wildcard" {
     const result = try matcher.matchPath("/api/users/123", "/api/*");
     try std.testing.expect(result != null);
     
-    if (result) |*match| {
-        defer match.deinit();
+    if (result) |match| {
+        var match_copy = match;
+        defer match_copy.deinit();
     }
 }
 
@@ -288,10 +289,11 @@ test "PathMatcher.parameters" {
     const result = try matcher.matchPath("/api/users/123/posts/456", "/api/users/{id}/posts/{post_id}");
     try std.testing.expect(result != null);
     
-    if (result) |*match| {
-        defer match.deinit();
+    if (result) |match| {
+        var match_copy = match;
+        defer match_copy.deinit();
         
-        try std.testing.expect(std.mem.eql(u8, match.getParameter("id").?, "123"));
-        try std.testing.expect(std.mem.eql(u8, match.getParameter("post_id").?, "456"));
+        try std.testing.expect(std.mem.eql(u8, match_copy.getParameter("id").?, "123"));
+        try std.testing.expect(std.mem.eql(u8, match_copy.getParameter("post_id").?, "456"));
     }
 }

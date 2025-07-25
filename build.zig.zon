@@ -1,16 +1,17 @@
 .{
-    .name = "popshop",
+    .fingerprint = 0xfc5ac1abf4c45fc0,
+    .name = .popshop,
     .version = "0.1.0",
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
         .httpz = .{
-            .url = "https://github.com/karlseguin/http.zig/archive/v0.13.tar.gz",
-            .hash = "1220b3e0a2598e006cba8c2d5f3e0cf12b44e59e1b0b67f1e0cc0b4f0d1e1d3b7e8d",
+            .url = "git+https://github.com/karlseguin/http.zig?ref=master#2924ead41db9e1986db3b4909a82185c576f6361",
+            .hash = "httpz-0.0.0-PNVzrC7CBgDSMZNP7chgAczR3FyAz5Eum6Kb1_K9kmYR",
         },
         .@"zig-yaml" = .{
-            .url = "https://github.com/kubkon/zig-yaml/archive/main.tar.gz",
-            .hash = "1220b3e0a2598e006cba8c2d5f3e0cf12b44e59e1b0b67f1e0cc0b4f0d1e1d3b7e8d",
+            .url = "https://github.com/kubkon/zig-yaml/archive/refs/tags/0.1.1.tar.gz",
+            .hash = "zig_yaml-0.1.0-C1161miEAgBCwL3YAEQZwV_4GyaaT2Xqj9nKB6hNe_TL",
         },
     },
 

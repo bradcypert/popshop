@@ -52,7 +52,7 @@ pub const CLI = struct {
 
             if (std.mem.eql(u8, arg, "--port") or std.mem.eql(u8, arg, "-p")) {
                 if (i + 1 >= args.len) {
-                    std.log.err("--port requires a value");
+                    std.log.err("--port requires a value", .{});
                     std.process.exit(1);
                 }
                 serve_config.port = std.fmt.parseInt(u16, args[i + 1], 10) catch |err| {
@@ -62,7 +62,7 @@ pub const CLI = struct {
                 i += 2;
             } else if (std.mem.eql(u8, arg, "--host") or std.mem.eql(u8, arg, "-h")) {
                 if (i + 1 >= args.len) {
-                    std.log.err("--host requires a value");
+                    std.log.err("--host requires a value", .{});
                     std.process.exit(1);
                 }
                 serve_config.host = args[i + 1];
@@ -72,7 +72,7 @@ pub const CLI = struct {
                 i += 1;
             } else if (std.mem.eql(u8, arg, "--max-request-size")) {
                 if (i + 1 >= args.len) {
-                    std.log.err("--max-request-size requires a value");
+                    std.log.err("--max-request-size requires a value", .{});
                     std.process.exit(1);
                 }
                 serve_config.max_request_size = std.fmt.parseInt(usize, args[i + 1], 10) catch |err| {
@@ -99,7 +99,7 @@ pub const CLI = struct {
 
     fn runValidateCommand(self: *CLI, args: []const []const u8) !void {
         if (args.len == 0) {
-            std.log.err("validate command requires a config file path");
+            std.log.err("validate command requires a config file path", .{});
             std.process.exit(1);
         }
 
@@ -115,21 +115,21 @@ pub const CLI = struct {
 
         const stats = self.analyzeConfig(&app_config);
         
-        std.log.info("✓ Configuration is valid");
+        std.log.info("✓ Configuration is valid", .{});
         std.log.info("  Total rules: {}", .{stats.total_rules});
         std.log.info("  Mock responses: {}", .{stats.mock_rules});
         std.log.info("  Proxy rules: {}", .{stats.proxy_rules});
         
-        if (stats.warnings.len > 0) {
-            std.log.warn("Warnings:");
-            for (stats.warnings) |warning| {
+        if (stats.warnings.items.len > 0) {
+            std.log.warn("Warnings:", .{});
+            for (stats.warnings.items) |warning| {
                 std.log.warn("  - {s}", .{warning});
             }
         }
     }
 
     fn startServer(self: *CLI, config_path: []const u8, serve_config: ServeConfig) !void {
-        std.log.info("Starting PopShop server...");
+        std.log.info("Starting PopShop server...", .{});
         std.log.info("Config file: {s}", .{config_path});
         std.log.info("Host: {s}", .{serve_config.host});
         std.log.info("Port: {}", .{serve_config.port});
@@ -169,42 +169,17 @@ pub const CLI = struct {
         // Start the server
         try popshop_app.start(server_config);
 
-        // Setup signal handling for graceful shutdown
-        const signal_handler = struct {
-            var should_exit = std.atomic.Value(bool).init(false);
-            var server_app: ?*PopshopApp = null;
+        std.log.info("Server started successfully!", .{});
+        std.log.info("Press Ctrl+C to stop the server (signal handling temporarily disabled)", .{});
 
-            fn handleSignal(sig: c_int) callconv(.C) void {
-                _ = sig;
-                std.log.info("Received shutdown signal...");
-                should_exit.store(true, .seq_cst);
-                if (server_app) |app_ptr| {
-                    app_ptr.stop() catch |err| {
-                        std.log.err("Error stopping server: {}", .{err});
-                    };
-                }
-            }
-        };
-
-        signal_handler.server_app = &popshop_app;
-        
-        // Register signal handlers
-        _ = std.c.signal(std.c.SIGINT, signal_handler.handleSignal);
-        _ = std.c.signal(std.c.SIGTERM, signal_handler.handleSignal);
-
-        std.log.info("Server started successfully!");
-        std.log.info("Press Ctrl+C to stop the server");
-
-        // Keep the main thread alive
-        while (!signal_handler.should_exit.load(.seq_cst)) {
-            std.time.sleep(100 * std.time.ns_per_ms); // Sleep 100ms
+        // Keep the server running (simplified without signal handling for now)
+        // In a production environment, you'd want to implement proper signal handling
+        while (true) {
+            std.time.sleep(1000 * std.time.ns_per_ms); // Sleep 1 second
         }
-
-        std.log.info("Shutting down gracefully...");
     }
 
     fn analyzeConfig(self: *CLI, app_config: *const Config) ConfigStats {
-        _ = self;
         
         var stats = ConfigStats{
             .total_rules = app_config.rules.items.len,
@@ -233,36 +208,35 @@ pub const CLI = struct {
 
     fn printUsage(self: *CLI) void {
         _ = self;
-        std.log.info("Usage: popshop <command> [options]");
-        std.log.info("");
-        std.log.info("Commands:");
-        std.log.info("  serve [config.yaml]    Start the HTTP server");
-        std.log.info("  validate <config.yaml> Validate configuration file");
-        std.log.info("  version               Show version information");
-        std.log.info("  help                  Show this help message");
+        std.log.info("Usage: popshop <command> [options]", .{});
+        std.log.info("", .{});
+        std.log.info("Commands:", .{});
+        std.log.info("  serve [config.yaml]    Start the HTTP server", .{});
+        std.log.info("  validate <config.yaml> Validate configuration file", .{});
+        std.log.info("  version               Show version information", .{});
+        std.log.info("  help                  Show this help message", .{});
     }
 
     fn printHelp(self: *CLI) void {
-        _ = self;
-        std.log.info("PopShop - HTTP mocking and proxy server");
-        std.log.info("");
+        std.log.info("PopShop - HTTP mocking and proxy server", .{});
+        std.log.info("", .{});
         self.printUsage();
-        std.log.info("");
-        std.log.info("Serve Options:");
-        std.log.info("  -p, --port <port>           Port to run server on (default: 8080)");
-        std.log.info("  -h, --host <host>           Host to bind to (default: 127.0.0.1)");
-        std.log.info("  -w, --watch                 Watch config file for changes");
-        std.log.info("  --max-request-size <bytes>  Maximum request size (default: 1048576)");
-        std.log.info("");
-        std.log.info("Examples:");
-        std.log.info("  popshop serve config.yaml");
-        std.log.info("  popshop serve config.yaml --port 3000 --watch");
-        std.log.info("  popshop validate config.yaml");
+        std.log.info("", .{});
+        std.log.info("Serve Options:", .{});
+        std.log.info("  -p, --port <port>           Port to run server on (default: 8080)", .{});
+        std.log.info("  -h, --host <host>           Host to bind to (default: 127.0.0.1)", .{});
+        std.log.info("  -w, --watch                 Watch config file for changes", .{});
+        std.log.info("  --max-request-size <bytes>  Maximum request size (default: 1048576)", .{});
+        std.log.info("", .{});
+        std.log.info("Examples:", .{});
+        std.log.info("  popshop serve config.yaml", .{});
+        std.log.info("  popshop serve config.yaml --port 3000 --watch", .{});
+        std.log.info("  popshop validate config.yaml", .{});
     }
 
     fn printVersion(self: *CLI) void {
         _ = self;
-        std.log.info("PopShop v0.1.0");
+        std.log.info("PopShop v0.1.0", .{});
         std.log.info("Built with Zig {s}", .{@import("builtin").zig_version_string});
     }
 };

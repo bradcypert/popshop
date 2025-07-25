@@ -14,6 +14,10 @@ const Rule = config.Rule;
 const RequestMatcher = matcher.RequestMatcher;
 const ProxyClient = proxy.ProxyClient;
 
+/// Global app instance for handler access
+/// Note: This is a simple approach for handler context access
+var app_instance: ?*PopshopApp = null;
+
 /// Core application that handles requests and manages the server
 pub const PopshopApp = struct {
     allocator: std.mem.Allocator,
@@ -39,6 +43,10 @@ pub const PopshopApp = struct {
 
     /// Start the HTTP server and begin handling requests
     pub fn start(self: *PopshopApp, server_config: interfaces.ServerConfig) !void {
+        // Store app instance globally for handler access
+        // Note: This is a simple approach; in production, consider using context injection
+        app_instance = self;
+        
         // Register our main handler
         try self.server.addRoute(.GET, "/*", handleRequest);
         try self.server.addRoute(.POST, "/*", handleRequest);
@@ -58,31 +66,24 @@ pub const PopshopApp = struct {
     /// Stop the server
     pub fn stop(self: *PopshopApp) !void {
         try self.server.stop();
-        std.log.info("PopShop server stopped");
+        app_instance = null; // Clear global reference
+        std.log.info("PopShop server stopped", .{});
     }
 
     /// Main request handler - this is where the magic happens
     fn handleRequest(request: *Request) !Response {
-        // Note: In a real implementation, we'd need access to the app instance
-        // This would typically be done through context or a global instance
-        // For now, this is a placeholder showing the intended flow
-        
         std.log.info("{s} {s}", .{ request.method.toString(), request.path });
 
-        // Find matching rule
-        // const matching_rule = self.matcher.findMatchingRule(request, self.config.rules.items);
-        
-        // if (matching_rule == null) {
-        //     std.log.warn("No matching rule found for {s} {s}", .{ request.method.toString(), request.path });
-        //     var response = Response.init(request.arena, .not_found);
-        //     response.setBody("No matching rule found");
-        //     return response;
-        // }
+        // Get app instance
+        const app = app_instance orelse {
+            std.log.err("App instance not available in request handler", .{});
+            var response = Response.init(request.arena, .internal_server_error);
+            response.setBody("Server configuration error");
+            return response;
+        };
 
-        // Mock response for now
-        var response = Response.init(request.arena, .ok);
-        try response.setJsonBody("{\"message\": \"Hello from PopShop!\", \"path\": \"" ++ request.path ++ "\"}");
-        return response;
+        // Use the full request handling logic
+        return app.handleRequestWithContext(request);
     }
 
     /// Handle a request with the full app context
@@ -112,7 +113,7 @@ pub const PopshopApp = struct {
         }
 
         // This should never happen if config is valid
-        std.log.err("Rule has neither mock response nor proxy config");
+        std.log.err("Rule has neither mock response nor proxy config", .{});
         var response = Response.init(request.arena, .internal_server_error);
         response.setBody("Invalid rule configuration");
         return response;
@@ -149,7 +150,7 @@ pub const PopshopApp = struct {
         
         std.log.info("Proxying request to {s}", .{proxy_config.url});
         
-        return self.proxy_client.proxyRequest(request, proxy_config);
+        return self.proxy_client.proxyRequest(request, &proxy_config);
     }
 
     /// Reload configuration from file
@@ -157,7 +158,7 @@ pub const PopshopApp = struct {
         std.log.info("Reloading configuration from {s}", .{config_path});
         
         // Load new config
-        var new_config = Config.loadFromFile(self.allocator, config_path) catch |err| {
+        const new_config = Config.loadFromFile(self.allocator, config_path) catch |err| {
             std.log.err("Failed to reload configuration: {}", .{err});
             return err;
         };
@@ -230,7 +231,7 @@ pub const ConfigWatcher = struct {
             thread.join();
             self.watch_thread = null;
         }
-        std.log.info("Stopped watching configuration file");
+        std.log.info("Stopped watching configuration file", .{});
     }
 
     fn watchConfigFile(self: *ConfigWatcher) !void {
