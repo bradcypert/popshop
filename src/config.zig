@@ -292,33 +292,251 @@ pub const Config = struct {
         return copied_rule;
     }
 
-    /// Load configuration from YAML string using typed parsing
+    /// Load configuration from YAML string 
     pub fn loadFromYaml(allocator: std.mem.Allocator, yaml_content: []const u8) !Config {
-        // For now, create a simple fallback that returns an empty config
-        // This allows the build to succeed while we properly implement YAML parsing
-        std.log.warn("YAML parsing temporarily disabled - returning empty config", .{});
-        _ = yaml_content; // Suppress unused variable warning
-        
         var config = Config.init(allocator);
+        errdefer config.deinit();
+
+        // Parse YAML using zig-yaml 0.1.1 API
+        var parsed_yaml: yaml.Yaml = .{ .source = yaml_content };
+        defer parsed_yaml.deinit(allocator);
         
-        // Add a basic test rule so the server has something to work with
-        const test_request = RequestRule{
-            .path = try allocator.dupe(u8, "/test"),
-            .method = try allocator.dupe(u8, "GET"),
-            .headers = null,
-            .body = null,
+        parsed_yaml.load(allocator) catch |err| switch (err) {
+            error.ParseFailure => {
+                std.log.err("YAML parse failure", .{});
+                return error.InvalidYamlFormat;
+            },
+            else => return err,
         };
+
+        // Check if we have any documents
+        if (parsed_yaml.docs.items.len == 0) {
+            std.log.warn("No YAML documents found", .{});
+            return config;
+        }
+
+        // Get the first document - should be an array of rules  
+        const doc = parsed_yaml.docs.items[0];
         
-        const test_response = MockResponse{
-            .status = 200,
-            .headers = null,
-            .body = try allocator.dupe(u8, "{\"message\": \"Hello from PopShop test rule!\"}"),
-        };
-        
-        const test_rule = Rule.init(test_request).withMockResponse(test_response);
-        try config.addRule(test_rule);
-        
+        // Process the YAML document to extract rules
+        try parseYamlDocument(allocator, &config, doc);
+
         return config;
+    }
+
+    fn parseYamlDocument(allocator: std.mem.Allocator, config: *Config, doc: anytype) !void {
+        switch (doc) {
+            .list => |list| {
+                // Expected format: array of rule objects
+                for (list) |rule_value| {
+                    const rule = try parseYamlRule(allocator, rule_value);
+                    try config.addRule(rule);
+                }
+            },
+            .map => {
+                // Single rule object
+                const rule = try parseYamlRule(allocator, doc);
+                try config.addRule(rule);
+            },
+            else => {
+                std.log.err("Expected YAML document to be a list or map, got: {}", .{doc});
+                return error.InvalidYamlFormat;
+            },
+        }
+    }
+
+    fn parseYamlRule(allocator: std.mem.Allocator, rule_value: anytype) !Rule {
+        const rule_map = switch (rule_value) {
+            .map => |map| map,
+            else => {
+                std.log.err("Expected rule to be a map, got: {}", .{rule_value});
+                return error.InvalidYamlFormat;
+            },
+        };
+
+        var request: ?RequestRule = null;
+        var response: ?MockResponse = null;
+        var proxy: ?ProxyConfig = null;
+
+        // Parse the rule map
+        var map_iter = rule_map.iterator();
+        while (map_iter.next()) |entry| {
+            const key = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+
+            if (std.mem.eql(u8, key, "request")) {
+                request = try parseYamlRequest(allocator, value);
+            } else if (std.mem.eql(u8, key, "response")) {
+                response = try parseYamlResponse(allocator, value);
+            } else if (std.mem.eql(u8, key, "proxy")) {
+                proxy = try parseYamlProxy(allocator, value);
+            }
+        }
+
+        if (request == null) {
+            return error.MissingRequestConfiguration;
+        }
+
+        var rule = Rule.init(request.?);
+        if (response) |r| {
+            rule = rule.withMockResponse(r);
+        }
+        if (proxy) |p| {
+            rule = rule.withProxy(p);
+        }
+
+        return rule;
+    }
+
+    fn parseYamlRequest(allocator: std.mem.Allocator, request_value: anytype) !RequestRule {
+        const request_map = switch (request_value) {
+            .map => |map| map,
+            else => return error.InvalidYamlFormat,
+        };
+
+        var path: ?[]const u8 = null;
+        var method: ?[]const u8 = null;
+        var headers: ?std.StringHashMap([]const u8) = null;
+        var body: ?[]const u8 = null;
+
+        var map_iter = request_map.iterator();
+        while (map_iter.next()) |entry| {
+            const key = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+
+            if (std.mem.eql(u8, key, "path")) {
+                if (value == .string) {
+                    path = try allocator.dupe(u8, value.string);
+                }
+            } else if (std.mem.eql(u8, key, "method") or std.mem.eql(u8, key, "verb")) {
+                if (value == .string) {
+                    method = try allocator.dupe(u8, value.string);
+                }
+            } else if (std.mem.eql(u8, key, "headers")) {
+                if (value == .map) {
+                    headers = try parseYamlHeaders(allocator, value.map);
+                }
+            } else if (std.mem.eql(u8, key, "body")) {
+                if (value == .string) {
+                    body = try allocator.dupe(u8, value.string);
+                }
+            }
+        }
+
+        if (path == null or method == null) {
+            return error.MissingRequiredRequestFields;
+        }
+
+        return RequestRule{
+            .path = path.?,
+            .method = method.?,
+            .headers = headers,
+            .body = body,
+        };
+    }
+
+    fn parseYamlResponse(allocator: std.mem.Allocator, response_value: anytype) !MockResponse {
+        const response_map = switch (response_value) {
+            .map => |map| map,
+            else => return error.InvalidYamlFormat,
+        };
+
+        var status: u16 = 200;
+        var headers: ?std.StringHashMap([]const u8) = null;
+        var body: []const u8 = "";
+
+        var map_iter = response_map.iterator();
+        while (map_iter.next()) |entry| {
+            const key = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+
+            if (std.mem.eql(u8, key, "status")) {
+                switch (value) {
+                    .int => |i| status = @intCast(i),
+                    .string => |s| status = std.fmt.parseInt(u16, s, 10) catch 200,
+                    else => {},
+                }
+            } else if (std.mem.eql(u8, key, "headers")) {
+                if (value == .map) {
+                    headers = try parseYamlHeaders(allocator, value.map);
+                }
+            } else if (std.mem.eql(u8, key, "body")) {
+                if (value == .string) {
+                    body = try allocator.dupe(u8, value.string);
+                }
+            }
+        }
+
+        return MockResponse{
+            .status = status,
+            .headers = headers,
+            .body = body,
+        };
+    }
+
+    fn parseYamlProxy(allocator: std.mem.Allocator, proxy_value: anytype) !ProxyConfig {
+        const proxy_map = switch (proxy_value) {
+            .map => |map| map,
+            else => return error.InvalidYamlFormat,
+        };
+
+        var url: ?[]const u8 = null;
+        var headers: ?std.StringHashMap([]const u8) = null;
+        var timeout_ms: u64 = 30000;
+
+        var map_iter = proxy_map.iterator();
+        while (map_iter.next()) |entry| {
+            const key: []const u8 = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+
+            if (std.mem.eql(u8, key, "url")) {
+                if (value == .string) {
+                    url = try allocator.dupe(u8, value.string);
+                }
+            } else if (std.mem.eql(u8, key, "headers")) {
+                if (value == .map) {
+                    headers = try parseYamlHeaders(allocator, value.map);
+                }
+            } else if (std.mem.eql(u8, key, "timeout_ms")) {
+                switch (value) {
+                    .int => |i| timeout_ms = @intCast(i),
+                    .string => |s| timeout_ms = std.fmt.parseInt(u64, s, 10) catch 30000,
+                    else => {},
+                }
+            }
+        }
+
+        if (url == null) {
+            return error.MissingProxyUrl;
+        }
+
+        return ProxyConfig{
+            .url = url.?,
+            .headers = headers,
+            .timeout_ms = timeout_ms,
+        };
+    }
+
+    fn parseYamlHeaders(allocator: std.mem.Allocator, headers_map: anytype) !std.StringHashMap([]const u8) {
+        var headers = std.StringHashMap([]const u8).init(allocator);
+
+        var map_iter = headers_map.iterator();
+        while (map_iter.next()) |entry| {
+            const key: []const u8 = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+            
+            // Only process string values
+            switch (value) {
+                .string => |s| {
+                    const owned_key = try allocator.dupe(u8, key);
+                    const owned_value = try allocator.dupe(u8, s);
+                    try headers.put(owned_key, owned_value);
+                },
+                else => continue,
+            }
+        }
+
+        return headers;
     }
 
 };
@@ -343,8 +561,10 @@ test "Config.loadFromYaml" {
     var config = try Config.loadFromYaml(allocator, yaml_content);
     defer config.deinit();
 
-    // Since YAML parsing is temporarily disabled, we expect the test rule instead
-    try std.testing.expect(config.rules.items.len == 1);
+    // We should have parsed 2 rules from the YAML content
+    try std.testing.expect(config.rules.items.len == 2);
     try std.testing.expect(config.rules.items[0].isMock());
     try std.testing.expect(!config.rules.items[0].isProxy());
+    try std.testing.expect(!config.rules.items[1].isMock());
+    try std.testing.expect(config.rules.items[1].isProxy());
 }
