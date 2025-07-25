@@ -23,8 +23,14 @@ pub const Method = enum {
     }
 
     pub fn fromString(str: []const u8) ?Method {
-        const upper = std.ascii.upperString(str);
-        return std.meta.stringToEnum(Method, upper);
+        if (std.ascii.eqlIgnoreCase(str, "GET")) return .GET;
+        if (std.ascii.eqlIgnoreCase(str, "POST")) return .POST;
+        if (std.ascii.eqlIgnoreCase(str, "PUT")) return .PUT;
+        if (std.ascii.eqlIgnoreCase(str, "DELETE")) return .DELETE;
+        if (std.ascii.eqlIgnoreCase(str, "PATCH")) return .PATCH;
+        if (std.ascii.eqlIgnoreCase(str, "HEAD")) return .HEAD;
+        if (std.ascii.eqlIgnoreCase(str, "OPTIONS")) return .OPTIONS;
+        return null;
     }
 };
 

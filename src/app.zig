@@ -88,7 +88,7 @@ pub const PopshopApp = struct {
 
     /// Handle a request with the full app context
     pub fn handleRequestWithContext(self: *PopshopApp, request: *Request) !Response {
-        std.log.info("{s} {s}", .{ request.method.toString(), request.path });
+        std.log.info("Handling request: {s} {s}", .{ request.method.toString(), request.path });
 
         // Find matching rule
         const matching_rule = self.matcher.findMatchingRule(request, self.config.rules.items);
