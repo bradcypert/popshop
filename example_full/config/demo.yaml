@@ -1,0 +1,211 @@
+# PopShop Demo Configuration
+# This configuration showcases various mocking and proxy capabilities
+
+# Basic health check endpoint
+- request:
+    path: "/health"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"status": "healthy", "service": "popshop-demo", "version": "1.0.0", "timestamp": "2025-01-26T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+      x-service: "popshop"
+      cache-control: "no-cache"
+
+# Users API - List all users
+- request:
+    path: "/api/users"
+    method: "GET"
+  response:
+    status: 200
+    body: '[{"id": 1, "name": "Alice Johnson", "email": "alice@example.com", "role": "developer", "active": true, "created_at": "2025-01-01T10:00:00Z"}, {"id": 2, "name": "Bob Smith", "email": "bob@example.com", "role": "designer", "active": true, "created_at": "2025-01-02T11:30:00Z"}, {"id": 3, "name": "Charlie Brown", "email": "charlie@example.com", "role": "manager", "active": false, "created_at": "2025-01-03T09:15:00Z"}]'
+    headers:
+      content-type: "application/json"
+      x-total-count: "3"
+      x-page: "1"
+
+# Users API - Create new user
+- request:
+    path: "/api/users"
+    method: "POST"
+  response:
+    status: 201
+    body: '{"id": 4, "name": "New User", "email": "newuser@example.com", "role": "user", "active": true, "created_at": "2025-01-26T10:00:00Z", "message": "User created successfully"}'
+    headers:
+      content-type: "application/json"
+      location: "/api/users/4"
+
+# Users API - Update user
+- request:
+    path: "/api/users"
+    method: "PUT"
+  response:
+    status: 200
+    body: '{"id": 1, "name": "Alice Johnson Updated", "email": "alice.updated@example.com", "role": "senior-developer", "active": true, "updated_at": "2025-01-26T10:00:00Z", "message": "User updated successfully"}'
+    headers:
+      content-type: "application/json"
+
+# Users API - Delete user
+- request:
+    path: "/api/users"
+    method: "DELETE"
+  response:
+    status: 200
+    body: '{"message": "User deleted successfully", "deleted_at": "2025-01-26T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+
+# Protected endpoint - Valid token
+- request:
+    path: "/api/protected"
+    method: "GET"
+    headers:
+      authorization: "Bearer valid-token"
+  response:
+    status: 200
+    body: '{"message": "Access granted", "user": "authenticated-user", "permissions": ["read", "write"], "token_expires": "2025-01-27T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+      x-auth-user: "authenticated-user"
+
+# Protected endpoint - Invalid/missing token
+- request:
+    path: "/api/protected"
+    method: "GET"
+  response:
+    status: 401
+    body: '{"error": "Unauthorized", "message": "Missing or invalid authorization header", "code": "AUTH_REQUIRED"}'
+    headers:
+      content-type: "application/json"
+      www-authenticate: "Bearer"
+
+# Products API - List products
+- request:
+    path: "/api/products"
+    method: "GET"
+  response:
+    status: 200
+    body: '{"products": [{"id": 101, "name": "MacBook Pro", "category": "Electronics", "price": 1999.99, "currency": "USD", "in_stock": true, "description": "High-performance laptop for professionals"}, {"id": 102, "name": "Wireless Mouse", "category": "Accessories", "price": 79.99, "currency": "USD", "in_stock": true, "description": "Ergonomic wireless mouse with precision tracking"}, {"id": 103, "name": "Standing Desk", "category": "Furniture", "price": 299.99, "currency": "USD", "in_stock": false, "description": "Adjustable height standing desk"}], "total": 3, "page": 1, "per_page": 10}'
+    headers:
+      content-type: "application/json"
+      x-ratelimit-remaining: "99"
+
+# Orders API - Create order
+- request:
+    path: "/api/orders"
+    method: "POST"
+  response:
+    status: 201
+    body: '{"id": "order_12345", "customer_id": 1, "items": [{"product_id": 101, "quantity": 1, "price": 1999.99}], "total": 1999.99, "currency": "USD", "status": "pending", "created_at": "2025-01-26T10:00:00Z", "estimated_delivery": "2025-02-02T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+      location: "/api/orders/order_12345"
+
+# File upload simulation
+- request:
+    path: "/api/upload"
+    method: "POST"
+  response:
+    status: 200
+    body: '{"message": "File uploaded successfully", "file_id": "file_abc123", "filename": "document.pdf", "size": 1024000, "upload_time": "2025-01-26T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+
+# Error simulation - Server error
+- request:
+    path: "/api/error"
+    method: "GET"
+  response:
+    status: 500
+    body: '{"error": "Internal Server Error", "message": "Something went wrong on our end", "code": "INTERNAL_ERROR", "timestamp": "2025-01-26T10:00:00Z"}'
+    headers:
+      content-type: "application/json"
+
+# Error simulation - Bad request
+- request:
+    path: "/api/bad-request"
+    method: "POST"
+  response:
+    status: 400
+    body: '{"error": "Bad Request", "message": "Invalid request format", "details": ["Missing required field: name", "Email format is invalid"], "code": "VALIDATION_ERROR"}'
+    headers:
+      content-type: "application/json"
+
+# Proxy to external weather API (will be handled by proxy server)
+- request:
+    path: "/api/external/weather"
+    method: "GET"
+  proxy:
+    url: "http://localhost:3001/weather"
+    timeout_ms: 5000
+    headers:
+      x-forwarded-by: "popshop-demo"
+      user-agent: "PopShop-Proxy/1.0.0"
+
+# Proxy to external user service
+- request:
+    path: "/api/external/users"
+    method: "GET"
+  proxy:
+    url: "http://localhost:3001/users"
+    timeout_ms: 3000
+    headers:
+      x-forwarded-by: "popshop-demo"
+
+# Rate limiting simulation
+- request:
+    path: "/api/ratelimited"
+    method: "GET"
+  response:
+    status: 429
+    body: '{"error": "Too Many Requests", "message": "Rate limit exceeded. Please try again later.", "retry_after": 60, "limit": 100, "window": "1 hour"}'
+    headers:
+      content-type: "application/json"
+      retry-after: "60"
+      x-ratelimit-limit: "100"
+      x-ratelimit-remaining: "0"
+      x-ratelimit-reset: "1706270400"
+
+# CORS preflight test
+- request:
+    path: "/api/cors-test"
+    method: "OPTIONS"
+  response:
+    status: 200
+    body: ""
+    headers:
+      access-control-allow-origin: "*"
+      access-control-allow-methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+      access-control-allow-headers: "Content-Type, Authorization"
+
+# Different content types
+- request:
+    path: "/api/xml"
+    method: "GET"
+  response:
+    status: 200
+    body: '<?xml version="1.0" encoding="UTF-8"?><response><status>success</status><data><user id="1"><name>Alice Johnson</name><email>alice@example.com</email></user></data></response>'
+    headers:
+      content-type: "application/xml"
+
+# Plain text response
+- request:
+    path: "/api/text"
+    method: "GET"
+  response:
+    status: 200
+    body: "This is a plain text response from PopShop.\nYou can use this to test non-JSON responses.\nTimestamp: 2025-01-26T10:00:00Z"
+    headers:
+      content-type: "text/plain"
+
+# CSV data response
+- request:
+    path: "/api/csv"
+    method: "GET"
+  response:
+    status: 200
+    body: "id,name,email,role,active\n1,Alice Johnson,alice@example.com,developer,true\n2,Bob Smith,bob@example.com,designer,true\n3,Charlie Brown,charlie@example.com,manager,false"
+    headers:
+      content-type: "text/csv"
+      content-disposition: "attachment; filename=users.csv"

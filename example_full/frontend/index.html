@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PopShop API Tester</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            font-family: monospace;
+        }
+        button {
+            background: #007AFF;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056CC;
+        }
+        button.secondary {
+            background: #6C757D;
+        }
+        button.secondary:hover {
+            background: #545B62;
+        }
+        .response-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+        }
+        .response-header {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .status-success { color: #28a745; }
+        .status-error { color: #dc3545; }
+        .response-body {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            border: 1px solid #e9ecef;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .headers-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .headers-table th, .headers-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .headers-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        .examples {
+            margin-top: 20px;
+        }
+        .example-button {
+            background: #28a745;
+            margin: 5px;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .example-button:hover {
+            background: #218838;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛍️ PopShop API Tester</h1>
+        
+        <form id="requestForm">
+            <div class="form-group">
+                <label for="serverUrl">PopShop Server URL:</label>
+                <input type="text" id="serverUrl" value="http://localhost:8080" placeholder="http://localhost:8080">
+            </div>
+            
+            <div class="form-group">
+                <label for="method">HTTP Method:</label>
+                <select id="method">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="OPTIONS">OPTIONS</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="path">Request Path:</label>
+                <input type="text" id="path" value="/api/health" placeholder="/api/health">
+            </div>
+            
+            <div class="form-group">
+                <label for="headers">Custom Headers (JSON format):</label>
+                <textarea id="headers" placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="body">Request Body:</label>
+                <textarea id="body" placeholder='{"name": "John", "email": "john@example.com"}'></textarea>
+            </div>
+            
+            <div>
+                <button type="submit">Send Request</button>
+                <button type="button" class="secondary" onclick="clearForm()">Clear</button>
+            </div>
+        </form>
+        
+        <div class="examples">
+            <h3>Quick Examples:</h3>
+            <button class="example-button" onclick="loadExample('health')">Health Check</button>
+            <button class="example-button" onclick="loadExample('users-get')">Get Users</button>
+            <button class="example-button" onclick="loadExample('users-post')">Create User</button>
+            <button class="example-button" onclick="loadExample('protected')">Protected Endpoint</button>
+            <button class="example-button" onclick="loadExample('proxy')">Proxy Request</button>
+        </div>
+        
+        <div class="response-section" id="responseSection" style="display: none;">
+            <h3>Response</h3>
+            <div class="response-header">
+                <div>
+                    <strong>Status:</strong> 
+                    <span id="responseStatus"></span>
+                </div>
+                <div>
+                    <strong>Response Time:</strong> 
+                    <span id="responseTime"></span>
+                </div>
+                <div>
+                    <strong>Response Headers:</strong>
+                    <table class="headers-table" id="responseHeaders">
+                        <thead>
+                            <tr><th>Name</th><th>Value</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div>
+                <strong>Response Body:</strong>
+                <div class="response-body" id="responseBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const examples = {
+            'health': {
+                method: 'GET',
+                path: '/health',
+                headers: '',
+                body: ''
+            },
+            'users-get': {
+                method: 'GET',
+                path: '/api/users',
+                headers: '',
+                body: ''
+            },
+            'users-post': {
+                method: 'POST',
+                path: '/api/users',
+                headers: '{"Content-Type": "application/json"}',
+                body: '{"name": "Alice Smith", "email": "alice@example.com", "role": "developer"}'
+            },
+            'protected': {
+                method: 'GET',
+                path: '/api/protected',
+                headers: '{"Authorization": "Bearer valid-token"}',
+                body: ''
+            },
+            'proxy': {
+                method: 'GET',
+                path: '/api/external/weather',
+                headers: '',
+                body: ''
+            }
+        };
+
+        function loadExample(exampleName) {
+            const example = examples[exampleName];
+            if (!example) return;
+            
+            document.getElementById('method').value = example.method;
+            document.getElementById('path').value = example.path;
+            document.getElementById('headers').value = example.headers;
+            document.getElementById('body').value = example.body;
+        }
+
+        function clearForm() {
+            document.getElementById('requestForm').reset();
+            document.getElementById('serverUrl').value = 'http://localhost:8080';
+            document.getElementById('path').value = '/api/health';
+            document.getElementById('responseSection').style.display = 'none';
+        }
+
+        function displayResponse(response, responseTime, responseText) {
+            const section = document.getElementById('responseSection');
+            const status = document.getElementById('responseStatus');
+            const time = document.getElementById('responseTime');
+            const headers = document.getElementById('responseHeaders').getElementsByTagName('tbody')[0];
+            const body = document.getElementById('responseBody');
+            
+            // Show response section
+            section.style.display = 'block';
+            
+            // Status
+            status.textContent = `${response.status} ${response.statusText}`;
+            status.className = response.ok ? 'status-success' : 'status-error';
+            
+            // Response time
+            time.textContent = `${responseTime}ms`;
+            
+            // Headers
+            headers.innerHTML = '';
+            for (let [name, value] of response.headers.entries()) {
+                const row = headers.insertRow();
+                row.insertCell(0).textContent = name;
+                row.insertCell(1).textContent = value;
+            }
+            
+            // Body
+            try {
+                const jsonBody = JSON.parse(responseText);
+                body.textContent = JSON.stringify(jsonBody, null, 2);
+            } catch (e) {
+                body.textContent = responseText;
+            }
+            
+            // Scroll to response
+            section.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function displayError(error, responseTime) {
+            const section = document.getElementById('responseSection');
+            const status = document.getElementById('responseStatus');
+            const time = document.getElementById('responseTime');
+            const headers = document.getElementById('responseHeaders').getElementsByTagName('tbody')[0];
+            const body = document.getElementById('responseBody');
+            
+            section.style.display = 'block';
+            status.textContent = 'Network Error';
+            status.className = 'status-error';
+            time.textContent = `${responseTime}ms`;
+            headers.innerHTML = '';
+            body.textContent = `Error: ${error.message}`;
+            
+            section.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        document.getElementById('requestForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            
+            // Get form values
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            const method = document.getElementById('method').value;
+            const path = document.getElementById('path').value.trim();
+            const headersText = document.getElementById('headers').value.trim();
+            const bodyText = document.getElementById('body').value.trim();
+            
+            // Build full URL
+            const url = serverUrl + path;
+            
+            // Parse headers
+            let headers = {};
+            if (headersText) {
+                try {
+                    headers = JSON.parse(headersText);
+                } catch (e) {
+                    alert('Invalid JSON in headers field');
+                    return;
+                }
+            }
+            
+            // Build request options
+            const options = {
+                method: method,
+                headers: headers,
+                mode: 'cors'
+            };
+            
+            // Add body for non-GET requests
+            if (method !== 'GET' && method !== 'HEAD' && bodyText) {
+                options.body = bodyText;
+                if (!headers['Content-Type']) {
+                    headers['Content-Type'] = 'application/json';
+                }
+            }
+            
+            // Show loading state
+            submitButton.textContent = 'Sending...';
+            form.classList.add('loading');
+            
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch(url, options);
+                const responseTime = Date.now() - startTime;
+                const responseText = await response.text();
+                
+                displayResponse(response, responseTime, responseText);
+            } catch (error) {
+                const responseTime = Date.now() - startTime;
+                displayError(error, responseTime);
+            } finally {
+                // Restore button state
+                submitButton.textContent = originalText;
+                form.classList.remove('loading');
+            }
+        });
+    </script>
+</body>
+</html>

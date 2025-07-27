@@ -84,9 +84,7 @@ pub const HttpZServer = struct {
             try self.setupRoute(&http_server, route);
         }
 
-        // Add CORS middleware (temporarily disabled)
-        // http_server.notFound(corsNotFound);
-        // http_server.errorHandler(errorHandler);
+        // CORS and error handling is implemented in the genericHandler
 
         // Start the server
         try http_server.listen();
@@ -146,6 +144,16 @@ pub const HttpZServer = struct {
     fn genericHandler(ctx: RequestContext, req: *httpz.Request, res: *httpz.Response) !void {
         const server_instance = ctx.server;
         
+        // Handle CORS preflight requests (OPTIONS)
+        if (req.method == .OPTIONS) {
+            res.header("Access-Control-Allow-Origin", "*");
+            res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+            res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            res.status = 200;
+            res.body = "";
+            return;
+        }
+        
         // Create route key from request method only (since we use wildcard paths)
         const method_str = @tagName(req.method);
         const route_key = try std.fmt.allocPrint(req.arena, "{s}:/*", .{method_str});
@@ -153,20 +161,28 @@ pub const HttpZServer = struct {
         // Look up the handler (should always be found since we register all methods)
         const handler = server_instance.route_handlers.get(route_key) orelse {
             std.log.warn("No handler found for method: {s}", .{method_str});
+            // Add CORS headers to 404 responses too
+            res.header("Access-Control-Allow-Origin", "*");
             res.status = 404;
             res.body = "Method not supported";
             return;
         };
         
-        // Convert httpz request to interface request
+        // Convert httpz request to interface request  
         var interface_req = try convertRequest(req, req.arena);
         defer interface_req.deinit();
         
-        // Call the actual handler
-        var interface_res = try handler(&interface_req);
+        // Call the actual handler (with error handling)
+        var interface_res = handler(&interface_req) catch |err| {
+            std.log.err("Request handler error: {}", .{err});
+            res.header("Access-Control-Allow-Origin", "*");
+            res.status = 500;
+            res.body = "Internal Server Error";
+            return;
+        };
         defer interface_res.deinit();
         
-        // Convert interface response to httpz response
+        // Convert interface response to httpz response (includes CORS headers)
         try convertResponse(res, interface_res);
     }
 
@@ -196,6 +212,11 @@ pub const HttpZServer = struct {
         // Set status
         res.status = @intFromEnum(response.status);
 
+        // Add CORS headers to all responses
+        res.header("Access-Control-Allow-Origin", "*");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
         // Set headers
         var header_iter = response.headers.iterator();
         while (header_iter.next()) |header| {
@@ -206,30 +227,6 @@ pub const HttpZServer = struct {
         res.body = response.body;
     }
 
-    fn corsNotFound(req: *httpz.Request, res: *httpz.Response, ctx: *RequestContext) !void {
-        _ = ctx;
-        
-        // Add CORS headers for OPTIONS requests
-        if (std.mem.eql(u8, req.method, "OPTIONS")) {
-            try res.header("Access-Control-Allow-Origin", "*");
-            try res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-            try res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-            res.status = 200;
-            return;
-        }
-
-        res.status = 404;
-        res.body = "Not Found";
-    }
-
-    fn errorHandler(req: *httpz.Request, res: *httpz.Response, err: anyerror, ctx: *RequestContext) void {
-        _ = req;
-        _ = ctx;
-        
-        std.log.err("Request error: {}", .{err});
-        res.status = 500;
-        res.body = "Internal Server Error";
-    }
 };
 
 /// Factory function to create HttpZ server
