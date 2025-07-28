@@ -103,9 +103,15 @@ main() {
     # Check prerequisites
     log_info "Checking prerequisites..."
     
-    # Check if zig is available
-    if ! command -v zig &> /dev/null; then
-        log_error "Zig not found. Please install Zig or ensure it's in your PATH"
+    # Check if mise is available
+    if ! command -v mise &> /dev/null; then
+        log_error "mise not found. Please install mise or ensure it's in your PATH"
+        exit 1
+    fi
+    
+    # Check if zig is available through mise
+    if ! mise exec -- zig version &> /dev/null; then
+        log_error "Zig not found through mise. Please run 'mise install' first"
         exit 1
     fi
     
@@ -133,7 +139,7 @@ main() {
     # Build PopShop
     log_info "Building PopShop..."
     cd "$PROJECT_ROOT"
-    zig build > /dev/null 2>&1
+    mise exec -- zig build > /dev/null 2>&1
     log_success "PopShop built successfully"
     
     # Start proxy server (if available)
@@ -155,7 +161,7 @@ main() {
     # Start PopShop server
     log_info "Starting PopShop server on port $POPSHOP_PORT..."
     cd "$PROJECT_ROOT"
-    zig build run -- serve example_full/config/demo.yaml > popshop.log 2>&1 &
+    mise exec -- zig build run -- serve example_full/config/demo.yaml > popshop.log 2>&1 &
     POPSHOP_PID=$!
     
     if wait_for_service "http://localhost:$POPSHOP_PORT/health" "PopShop server"; then
