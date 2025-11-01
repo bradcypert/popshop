@@ -111,7 +111,7 @@ pub const Config = struct {
 
     pub fn init(allocator: std.mem.Allocator) Config {
         return Config{
-            .rules = std.ArrayList(Rule).init(allocator),
+            .rules = .empty,
             .allocator = allocator,
         };
     }
@@ -120,11 +120,11 @@ pub const Config = struct {
         for (self.rules.items) |*rule| {
             rule.deinit(self.allocator);
         }
-        self.rules.deinit();
+        self.rules.deinit(self.allocator);
     }
 
     pub fn addRule(self: *Config, rule: Rule) !void {
-        try self.rules.append(rule);
+        try self.rules.append(self.allocator, rule);
     }
 
     /// Load configuration from YAML file or directory
@@ -176,7 +176,7 @@ pub const Config = struct {
         while (try iterator.next()) |entry| {
             // Only process .yaml and .yml files
             if (entry.kind != .file) continue;
-            
+
             const ext = std.fs.path.extension(entry.name);
             if (!std.mem.eql(u8, ext, ".yaml") and !std.mem.eql(u8, ext, ".yml")) {
                 continue;
@@ -292,22 +292,23 @@ pub const Config = struct {
         return copied_rule;
     }
 
-    /// Load configuration from YAML string 
+    /// Load configuration from YAML string
     pub fn loadFromYaml(allocator: std.mem.Allocator, yaml_content: []const u8) !Config {
         var config = Config.init(allocator);
         errdefer config.deinit();
 
-        // Parse YAML using zig-yaml 0.1.1 API
         var parsed_yaml: yaml.Yaml = .{ .source = yaml_content };
-        defer parsed_yaml.deinit(allocator);
-        
+
         parsed_yaml.load(allocator) catch |err| switch (err) {
             error.ParseFailure => {
-                std.log.err("YAML parse failure", .{});
+                parsed_yaml.parse_errors.renderToStdErr(.{ .ttyconf = .no_color });
+                std.log.err("YAML parse failure: {any}", .{err});
                 return error.InvalidYamlFormat;
             },
             else => return err,
         };
+
+        defer parsed_yaml.deinit(allocator);
 
         // Check if we have any documents
         if (parsed_yaml.docs.items.len == 0) {
@@ -315,9 +316,9 @@ pub const Config = struct {
             return config;
         }
 
-        // Get the first document - should be an array of rules  
+        // Get the first document - should be an array of rules
         const doc = parsed_yaml.docs.items[0];
-        
+
         // Process the YAML document to extract rules
         try parseYamlDocument(allocator, &config, doc);
 
@@ -405,20 +406,20 @@ pub const Config = struct {
             const value = entry.value_ptr.*;
 
             if (std.mem.eql(u8, key, "path")) {
-                if (value == .string) {
-                    path = try allocator.dupe(u8, value.string);
+                if (value == .scalar) {
+                    path = try allocator.dupe(u8, value.scalar);
                 }
             } else if (std.mem.eql(u8, key, "method") or std.mem.eql(u8, key, "verb")) {
-                if (value == .string) {
-                    method = try allocator.dupe(u8, value.string);
+                if (value == .scalar) {
+                    method = try allocator.dupe(u8, value.scalar);
                 }
             } else if (std.mem.eql(u8, key, "headers")) {
                 if (value == .map) {
                     headers = try parseYamlHeaders(allocator, value.map);
                 }
             } else if (std.mem.eql(u8, key, "body")) {
-                if (value == .string) {
-                    body = try allocator.dupe(u8, value.string);
+                if (value == .scalar) {
+                    body = try allocator.dupe(u8, value.scalar);
                 }
             }
         }
@@ -452,8 +453,7 @@ pub const Config = struct {
 
             if (std.mem.eql(u8, key, "status")) {
                 switch (value) {
-                    .int => |i| status = @intCast(i),
-                    .string => |s| status = std.fmt.parseInt(u16, s, 10) catch 200,
+                    .scalar => |s| status = std.fmt.parseInt(u16, s, 10) catch 200,
                     else => {},
                 }
             } else if (std.mem.eql(u8, key, "headers")) {
@@ -461,8 +461,8 @@ pub const Config = struct {
                     headers = try parseYamlHeaders(allocator, value.map);
                 }
             } else if (std.mem.eql(u8, key, "body")) {
-                if (value == .string) {
-                    body = try allocator.dupe(u8, value.string);
+                if (value == .scalar) {
+                    body = try allocator.dupe(u8, value.scalar);
                 }
             }
         }
@@ -490,8 +490,8 @@ pub const Config = struct {
             const value = entry.value_ptr.*;
 
             if (std.mem.eql(u8, key, "url")) {
-                if (value == .string) {
-                    url = try allocator.dupe(u8, value.string);
+                if (value == .scalar) {
+                    url = try allocator.dupe(u8, value.scalar);
                 }
             } else if (std.mem.eql(u8, key, "headers")) {
                 if (value == .map) {
@@ -499,8 +499,7 @@ pub const Config = struct {
                 }
             } else if (std.mem.eql(u8, key, "timeout_ms")) {
                 switch (value) {
-                    .int => |i| timeout_ms = @intCast(i),
-                    .string => |s| timeout_ms = std.fmt.parseInt(u64, s, 10) catch 30000,
+                    .scalar => |s| timeout_ms = std.fmt.parseInt(u64, s, 10) catch 30000,
                     else => {},
                 }
             }
@@ -524,10 +523,10 @@ pub const Config = struct {
         while (map_iter.next()) |entry| {
             const key: []const u8 = entry.key_ptr.*;
             const value = entry.value_ptr.*;
-            
+
             // Only process string values
             switch (value) {
-                .string => |s| {
+                .scalar => |s| {
                     const owned_key = try allocator.dupe(u8, key);
                     const owned_value = try allocator.dupe(u8, s);
                     try headers.put(owned_key, owned_value);
@@ -538,12 +537,11 @@ pub const Config = struct {
 
         return headers;
     }
-
 };
 
 test "Config.loadFromYaml" {
     const allocator = std.testing.allocator;
-    
+
     const yaml_content =
         \\- request:
         \\    path: "/api/health"

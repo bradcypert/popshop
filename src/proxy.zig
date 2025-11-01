@@ -26,8 +26,8 @@ pub const ProxyClient = struct {
 
     /// Proxy a request to the target URL
     pub fn proxyRequest(
-        self: *ProxyClient, 
-        request: *const Request, 
+        self: *ProxyClient,
+        request: *const Request,
         proxy_config: *const ProxyConfig,
     ) !Response {
         // Validate proxy URL for security
@@ -47,11 +47,10 @@ pub const ProxyClient = struct {
         };
 
         // Create HTTP request
-        var req = try self.client.open(
+        var req = try self.client.request(
             parseMethod(request.method),
             uri,
             .{
-                .server_header_buffer = try request.arena.alloc(u8, 16 * 1024),
                 .redirect_behavior = .unhandled,
             },
         );
@@ -66,31 +65,32 @@ pub const ProxyClient = struct {
         // Copy headers from original request (temporarily disabled)
         // try self.copyRequestHeaders(&req, request, proxy_config);
 
-        // Set content length if body exists
+        // Send request with body
         if (request.body.len > 0) {
             req.transfer_encoding = .{ .content_length = request.body.len };
+            // Use a temporary buffer for sendBody
+            const body_buffer = try request.arena.alloc(u8, 16 * 1024);
+            var body_writer = try req.sendBody(body_buffer);
+            try body_writer.writer.writeAll(request.body);
+            try body_writer.end();
+        } else {
+            try req.sendBodiless();
         }
 
-        // Send request
-        try req.send();
-
-        // Send body if present
-        if (request.body.len > 0) {
-            try req.writeAll(request.body);
-            try req.finish();
-        }
-
-        // Wait for response
-        try req.wait();
+        // Receive response head
+        const redirect_buffer = try request.arena.alloc(u8, 0); // No redirects handled
+        var http_response = try req.receiveHead(redirect_buffer);
 
         // Create response
-        var response = Response.init(request.arena, @enumFromInt(@intFromEnum(req.response.status)));
-        
+        var response = Response.init(request.arena, @enumFromInt(@intFromEnum(http_response.head.status)));
+
         // Copy response headers
-        try self.copyResponseHeaders(&response, &req);
+        try self.copyResponseHeaders(&response, &http_response);
 
         // Read response body
-        const body = try req.reader().readAllAlloc(request.arena, 10 * 1024 * 1024); // 10MB max
+        const transfer_buffer = try request.arena.alloc(u8, 16 * 1024);
+        const body_reader = http_response.reader(transfer_buffer);
+        const body = try body_reader.allocRemaining(request.arena, std.io.Limit.limited(10 * 1024 * 1024)); // 10MB max
         response.setBody(body);
 
         return response;
@@ -109,12 +109,12 @@ pub const ProxyClient = struct {
         while (iter.next()) |entry| {
             const name = entry.key_ptr.*;
             const value = entry.value_ptr.*;
-            
+
             // Skip headers that shouldn't be forwarded
             if (shouldSkipHeader(name)) {
                 continue;
             }
-            
+
             try req.headers.append(name, value);
         }
 
@@ -130,19 +130,19 @@ pub const ProxyClient = struct {
         try req.headers.append("X-Forwarded-For", "popshop-proxy");
     }
 
-    fn copyResponseHeaders(self: *ProxyClient, response: *Response, req: *std.http.Client.Request) !void {
+    fn copyResponseHeaders(self: *ProxyClient, response: *Response, http_response: *std.http.Client.Response) !void {
         _ = self;
-        
-        var iter = req.response.iterateHeaders();
+
+        var iter = http_response.head.iterateHeaders();
         while (iter.next()) |header| {
             const name = header.name;
             const value = header.value;
-            
+
             // Skip headers that can cause issues when proxying
             if (shouldSkipResponseHeader(name)) {
                 continue;
             }
-            
+
             try response.setHeader(name, value);
         }
     }
@@ -163,39 +163,41 @@ pub const ProxyClient = struct {
 /// Validate proxy URLs to prevent SSRF attacks
 fn isValidProxyUrl(url: []const u8) bool {
     const uri = std.Uri.parse(url) catch return false;
-    
+
     // Only allow HTTP and HTTPS
     if (!std.mem.eql(u8, uri.scheme, "http") and !std.mem.eql(u8, uri.scheme, "https")) {
         return false;
     }
-    
+
     const host_component = uri.host orelse return false;
     const host = switch (host_component) {
         .raw => |raw| raw,
         .percent_encoded => |encoded| encoded,
     };
-    
+
     // Block localhost and loopback addresses
-    if (std.mem.eql(u8, host, "localhost") or 
+    if (std.mem.eql(u8, host, "localhost") or
         std.mem.eql(u8, host, "127.0.0.1") or
         std.mem.eql(u8, host, "::1") or
-        std.mem.eql(u8, host, "0.0.0.0")) {
+        std.mem.eql(u8, host, "0.0.0.0"))
+    {
         return false;
     }
-    
+
     // Block private IP ranges (basic check)
     if (std.mem.startsWith(u8, host, "10.") or
         std.mem.startsWith(u8, host, "192.168.") or
-        std.mem.startsWith(u8, host, "169.254.")) {
+        std.mem.startsWith(u8, host, "169.254."))
+    {
         return false;
     }
-    
+
     // Check for 172.16-31.x.x range
     if (std.mem.startsWith(u8, host, "172.")) {
         var parts = std.mem.splitScalar(u8, host, '.');
         var count: u8 = 0;
         var second_octet: u32 = 0;
-        
+
         while (parts.next()) |part| {
             count += 1;
             if (count == 2) {
@@ -207,7 +209,7 @@ fn isValidProxyUrl(url: []const u8) bool {
             }
         }
     }
-    
+
     return true;
 }
 
@@ -216,11 +218,11 @@ fn shouldSkipHeader(name: []const u8) bool {
     var lower_name_buf: [256]u8 = undefined;
     if (name.len > lower_name_buf.len) return false;
     const lower_name = std.ascii.lowerString(lower_name_buf[0..name.len], name);
-    
+
     const skip_headers = [_][]const u8{
         "host",
         "connection",
-        "upgrade", 
+        "upgrade",
         "proxy-connection",
         "proxy-authenticate",
         "proxy-authorization",
@@ -228,13 +230,13 @@ fn shouldSkipHeader(name: []const u8) bool {
         "trailers",
         "transfer-encoding",
     };
-    
+
     for (skip_headers) |skip| {
         if (std.mem.eql(u8, lower_name, skip)) {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -243,22 +245,22 @@ fn shouldSkipResponseHeader(name: []const u8) bool {
     var lower_name_buf: [256]u8 = undefined;
     if (name.len > lower_name_buf.len) return false;
     const lower_name = std.ascii.lowerString(lower_name_buf[0..name.len], name);
-    
+
     const skip_headers = [_][]const u8{
         "connection",
         "upgrade",
-        "proxy-authenticate", 
+        "proxy-authenticate",
         "proxy-authorization",
         "transfer-encoding",
         "content-encoding", // Let the client handle encoding
     };
-    
+
     for (skip_headers) |skip| {
         if (std.mem.eql(u8, lower_name, skip)) {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -314,7 +316,7 @@ pub const SecurityMiddleware = struct {
 
     fn getClientIp(self: *SecurityMiddleware, request: *Request) []const u8 {
         _ = self;
-        
+
         // Check X-Forwarded-For header first
         if (request.getHeader("X-Forwarded-For")) |xff| {
             var parts = std.mem.splitScalar(u8, xff, ',');
@@ -322,12 +324,12 @@ pub const SecurityMiddleware = struct {
                 return std.mem.trim(u8, first_ip, " ");
             }
         }
-        
+
         // Check X-Real-IP header
         if (request.getHeader("X-Real-IP")) |real_ip| {
             return std.mem.trim(u8, real_ip, " ");
         }
-        
+
         return "unknown";
     }
 
@@ -337,7 +339,7 @@ pub const SecurityMiddleware = struct {
         const max_requests = 100;
 
         const result = try self.rate_limit_map.getOrPut(client_ip);
-        
+
         if (!result.found_existing) {
             // First request from this IP
             result.value_ptr.* = RateLimitEntry{
@@ -348,7 +350,7 @@ pub const SecurityMiddleware = struct {
         }
 
         const entry = result.value_ptr;
-        
+
         // Reset window if expired
         if (now - entry.window_start >= window_size) {
             entry.count = 1;
@@ -358,7 +360,7 @@ pub const SecurityMiddleware = struct {
 
         // Increment counter
         entry.count += 1;
-        
+
         return entry.count > max_requests;
     }
 };
@@ -366,7 +368,7 @@ pub const SecurityMiddleware = struct {
 test "isValidProxyUrl" {
     try std.testing.expect(isValidProxyUrl("https://httpbin.org/get"));
     try std.testing.expect(isValidProxyUrl("http://example.com/api"));
-    
+
     try std.testing.expect(!isValidProxyUrl("ftp://example.com"));
     try std.testing.expect(!isValidProxyUrl("https://localhost:8080"));
     try std.testing.expect(!isValidProxyUrl("http://127.0.0.1"));
@@ -379,7 +381,7 @@ test "shouldSkipHeader" {
     try std.testing.expect(shouldSkipHeader("Host"));
     try std.testing.expect(shouldSkipHeader("connection"));
     try std.testing.expect(shouldSkipHeader("UPGRADE"));
-    
+
     try std.testing.expect(!shouldSkipHeader("Content-Type"));
     try std.testing.expect(!shouldSkipHeader("Authorization"));
 }

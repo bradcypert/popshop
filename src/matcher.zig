@@ -17,7 +17,7 @@ pub const RequestMatcher = struct {
     /// Find the first rule that matches the given request
     pub fn findMatchingRule(self: *RequestMatcher, request: *const Request, rules: []const Rule) ?*const Rule {
         // RequestMatcher might need allocator for future regex support
-        
+
         for (rules) |*rule| {
             if (self.doesRuleMatch(request, rule)) {
                 return rule;
@@ -53,19 +53,19 @@ pub const RequestMatcher = struct {
 
     fn matchMethod(self: *RequestMatcher, request: *const Request, rule: *const Rule) bool {
         _ = self;
-        
+
         const request_method = request.method.toString();
         const rule_method = rule.request.method;
-        
+
         return std.ascii.eqlIgnoreCase(request_method, rule_method);
     }
 
     fn matchPath(self: *RequestMatcher, request: *const Request, rule: *const Rule) bool {
         _ = self;
-        
+
         const request_path = request.path;
         const rule_path = rule.request.path;
-        
+
         // For now, exact match. Could be extended to support:
         // - Wildcards: /api/*
         // - Path parameters: /api/users/{id}
@@ -75,27 +75,27 @@ pub const RequestMatcher = struct {
 
     fn matchHeaders(self: *RequestMatcher, request: *const Request, rule: *const Rule) bool {
         _ = self;
-        
+
         const rule_headers = rule.request.headers orelse return true;
-        
+
         var iter = rule_headers.iterator();
         while (iter.next()) |entry| {
             const header_name = entry.key_ptr.*;
             const expected_value = entry.value_ptr.*;
-            
+
             const actual_value = request.getHeader(header_name) orelse return false;
-            
+
             if (!std.mem.eql(u8, actual_value, expected_value)) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
     fn matchBody(self: *RequestMatcher, request: *const Request, rule: *const Rule) bool {
         _ = self;
-        
+
         const expected_body = rule.request.body orelse return true;
         return std.mem.eql(u8, request.body, expected_body);
     }
@@ -112,11 +112,12 @@ pub const PathMatcher = struct {
     /// Match path with support for wildcards and parameters
     /// Examples:
     /// - "/api/*" matches "/api/users" and "/api/posts"
-    /// - "/api/users/{id}" matches "/api/users/123" 
+    /// - "/api/users/{id}" matches "/api/users/123"
     /// - "/api/users/{id}/posts/{post_id}" matches "/api/users/123/posts/456"
     pub fn matchPath(self: *PathMatcher, request_path: []const u8, rule_path: []const u8) !?PathMatch {
-        if (std.mem.indexOf(u8, rule_path, "*") == null and 
-            std.mem.indexOf(u8, rule_path, "{") == null) {
+        if (std.mem.indexOf(u8, rule_path, "*") == null and
+            std.mem.indexOf(u8, rule_path, "{") == null)
+        {
             // Simple exact match
             if (std.mem.eql(u8, request_path, rule_path)) {
                 return PathMatch.init(self.allocator);
@@ -162,7 +163,7 @@ pub const PathMatcher = struct {
 
             // Parameter extraction
             if (std.mem.startsWith(u8, rule_seg, "{") and std.mem.endsWith(u8, rule_seg, "}")) {
-                const param_name = rule_seg[1..rule_seg.len-1];
+                const param_name = rule_seg[1 .. rule_seg.len - 1];
                 try match.addParameter(param_name, req_seg);
                 continue;
             }
@@ -213,13 +214,13 @@ pub const PathMatch = struct {
 
 test "RequestMatcher.exact_match" {
     const allocator = std.testing.allocator;
-    
+
     var matcher = RequestMatcher.init(allocator);
-    
+
     // Create a mock request
     var headers = HeaderMap.init(allocator);
     defer headers.deinit();
-    
+
     const request = Request{
         .method = .GET,
         .path = "/api/health",
@@ -228,7 +229,7 @@ test "RequestMatcher.exact_match" {
         .body = "",
         .arena = allocator,
     };
-    
+
     // Create a matching rule
     const rule = Rule{
         .request = config.RequestRule{
@@ -236,18 +237,18 @@ test "RequestMatcher.exact_match" {
             .method = "GET",
         },
     };
-    
+
     try std.testing.expect(matcher.doesRuleMatch(&request, &rule));
 }
 
 test "RequestMatcher.method_mismatch" {
     const allocator = std.testing.allocator;
-    
+
     var matcher = RequestMatcher.init(allocator);
-    
+
     var headers = HeaderMap.init(allocator);
     defer headers.deinit();
-    
+
     const request = Request{
         .method = .POST,
         .path = "/api/health",
@@ -256,25 +257,25 @@ test "RequestMatcher.method_mismatch" {
         .body = "",
         .arena = allocator,
     };
-    
+
     const rule = Rule{
         .request = config.RequestRule{
             .path = "/api/health",
             .method = "GET", // Different method
         },
     };
-    
+
     try std.testing.expect(!matcher.doesRuleMatch(&request, &rule));
 }
 
 test "PathMatcher.wildcard" {
     const allocator = std.testing.allocator;
-    
+
     var matcher = PathMatcher.init(allocator);
-    
+
     const result = try matcher.matchPath("/api/users/123", "/api/*");
     try std.testing.expect(result != null);
-    
+
     if (result) |match| {
         var match_copy = match;
         defer match_copy.deinit();
@@ -283,16 +284,16 @@ test "PathMatcher.wildcard" {
 
 test "PathMatcher.parameters" {
     const allocator = std.testing.allocator;
-    
+
     var matcher = PathMatcher.init(allocator);
-    
+
     const result = try matcher.matchPath("/api/users/123/posts/456", "/api/users/{id}/posts/{post_id}");
     try std.testing.expect(result != null);
-    
+
     if (result) |match| {
         var match_copy = match;
         defer match_copy.deinit();
-        
+
         try std.testing.expect(std.mem.eql(u8, match_copy.getParameter("id").?, "123"));
         try std.testing.expect(std.mem.eql(u8, match_copy.getParameter("post_id").?, "456"));
     }
