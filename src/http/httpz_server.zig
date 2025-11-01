@@ -35,8 +35,8 @@ pub const HttpZServer = struct {
     pub fn init(allocator: std.mem.Allocator) !HttpZServer {
         return HttpZServer{
             .allocator = allocator,
-            .routes = std.ArrayList(Route).init(allocator),
-            .middlewares = std.ArrayList(MiddlewareFn).init(allocator),
+            .routes = .empty,
+            .middlewares = .empty,
             .route_handlers = std.StringHashMap(HandlerFn).init(allocator),
         };
     }
@@ -102,9 +102,9 @@ pub const HttpZServer = struct {
 
     fn addRoute(ptr: *anyopaque, method: Method, path: []const u8, handler: HandlerFn) !void {
         const self: *HttpZServer = @ptrCast(@alignCast(ptr));
-        
+
         // Store route for later setup
-        try self.routes.append(.{
+        try self.routes.append(self.allocator, .{
             .method = method,
             .path = try self.allocator.dupe(u8, path),
             .handler = handler,
@@ -113,22 +113,22 @@ pub const HttpZServer = struct {
 
     fn addMiddleware(ptr: *anyopaque, middleware: MiddlewareFn) !void {
         const self: *HttpZServer = @ptrCast(@alignCast(ptr));
-        try self.middlewares.append(middleware);
+        try self.middlewares.append(self.allocator, middleware);
     }
 
     fn setupRoute(self: *HttpZServer, http_server: *httpz.Server(RequestContext), route: Route) !void {
         // Get the router with default config
         var router = try http_server.router(.{});
-        
+
         // Create a unique key for this route
         const route_key = try std.fmt.allocPrint(self.allocator, "{s}:{s}", .{ route.method.toString(), route.path });
         defer self.allocator.free(route_key);
-        
+
         // Store the handler in our map
         try self.route_handlers.put(try self.allocator.dupe(u8, route_key), route.handler);
-        
+
         std.log.debug("Registered route: {s}", .{route_key});
-        
+
         // Register the route with a generic wrapper function that looks up the handler
         switch (route.method) {
             .GET => router.get(route.path, genericHandler, .{}),
@@ -140,10 +140,10 @@ pub const HttpZServer = struct {
             .OPTIONS => router.options(route.path, genericHandler, .{}),
         }
     }
-    
+
     fn genericHandler(ctx: RequestContext, req: *httpz.Request, res: *httpz.Response) !void {
         const server_instance = ctx.server;
-        
+
         // Handle CORS preflight requests (OPTIONS)
         if (req.method == .OPTIONS) {
             res.header("Access-Control-Allow-Origin", "*");
@@ -153,11 +153,11 @@ pub const HttpZServer = struct {
             res.body = "";
             return;
         }
-        
+
         // Create route key from request method only (since we use wildcard paths)
         const method_str = @tagName(req.method);
         const route_key = try std.fmt.allocPrint(req.arena, "{s}:/*", .{method_str});
-        
+
         // Look up the handler (should always be found since we register all methods)
         const handler = server_instance.route_handlers.get(route_key) orelse {
             std.log.warn("No handler found for method: {s}", .{method_str});
@@ -167,11 +167,11 @@ pub const HttpZServer = struct {
             res.body = "Method not supported";
             return;
         };
-        
-        // Convert httpz request to interface request  
+
+        // Convert httpz request to interface request
         var interface_req = try convertRequest(req, req.arena);
         defer interface_req.deinit();
-        
+
         // Call the actual handler (with error handling)
         var interface_res = handler(&interface_req) catch |err| {
             std.log.err("Request handler error: {}", .{err});
@@ -181,14 +181,14 @@ pub const HttpZServer = struct {
             return;
         };
         defer interface_res.deinit();
-        
+
         // Convert interface response to httpz response (includes CORS headers)
         try convertResponse(res, interface_res);
     }
 
     fn convertRequest(req: *httpz.Request, arena: std.mem.Allocator) !Request {
         var headers = HeaderMap.init(arena);
-        
+
         // Convert headers - httpz headers are key-value pairs
         var header_it = req.headers.iterator();
         while (header_it.next()) |kv| {
@@ -226,7 +226,6 @@ pub const HttpZServer = struct {
         // Set body
         res.body = response.body;
     }
-
 };
 
 /// Factory function to create HttpZ server

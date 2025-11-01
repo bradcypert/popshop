@@ -46,7 +46,7 @@ pub const PopshopApp = struct {
         // Store app instance globally for handler access
         // Note: This is a simple approach; in production, consider using context injection
         app_instance = self;
-        
+
         // Register our main handler
         try self.server.addRoute(.GET, "/*", handleRequest);
         try self.server.addRoute(.POST, "/*", handleRequest);
@@ -58,7 +58,7 @@ pub const PopshopApp = struct {
 
         // Start the server
         try self.server.start(server_config);
-        
+
         std.log.info("PopShop server started on {s}:{d}", .{ server_config.host, server_config.port });
         std.log.info("Loaded {} rule(s)", .{self.config.rules.items.len});
     }
@@ -92,7 +92,7 @@ pub const PopshopApp = struct {
 
         // Find matching rule
         const matching_rule = self.matcher.findMatchingRule(request, self.config.rules.items);
-        
+
         if (matching_rule == null) {
             std.log.warn("No matching rule found for {s} {s}", .{ request.method.toString(), request.path });
             var response = Response.init(request.arena, .not_found);
@@ -121,13 +121,13 @@ pub const PopshopApp = struct {
 
     fn serveMockResponse(self: *PopshopApp, request: *Request, rule: *const Rule) !Response {
         _ = self;
-        
+
         const mock_response = rule.response.?;
-        
+
         std.log.info("Serving mock response: {d}", .{mock_response.status});
-        
+
         var response = Response.init(request.arena, @enumFromInt(mock_response.status));
-        
+
         // Set custom headers
         if (mock_response.headers) |headers| {
             var iter = headers.iterator();
@@ -135,38 +135,38 @@ pub const PopshopApp = struct {
                 try response.setHeader(entry.key_ptr.*, entry.value_ptr.*);
             }
         }
-        
+
         // Set default content-type if not specified
         if (!response.headers.contains("Content-Type")) {
             try response.setHeader("Content-Type", "application/json");
         }
-        
+
         response.setBody(mock_response.body);
         return response;
     }
 
     fn proxyRequest(self: *PopshopApp, request: *Request, rule: *const Rule) !Response {
         const proxy_config = rule.proxy.?;
-        
+
         std.log.info("Proxying request to {s}", .{proxy_config.url});
-        
+
         return self.proxy_client.proxyRequest(request, &proxy_config);
     }
 
     /// Reload configuration from file
     pub fn reloadConfig(self: *PopshopApp, config_path: []const u8) !void {
         std.log.info("Reloading configuration from {s}", .{config_path});
-        
+
         // Load new config
         const new_config = Config.loadFromFile(self.allocator, config_path) catch |err| {
             std.log.err("Failed to reload configuration: {}", .{err});
             return err;
         };
-        
+
         // Replace old config
         self.config.deinit();
         self.config = new_config;
-        
+
         std.log.info("Configuration reloaded successfully - {} rule(s)", .{self.config.rules.items.len});
     }
 
@@ -236,46 +236,46 @@ pub const ConfigWatcher = struct {
 
     fn watchConfigFile(self: *ConfigWatcher) !void {
         var last_modified: i128 = 0;
-        
+
         while (!self.should_stop.load(.seq_cst)) {
             // Check file modification time
             const file = std.fs.cwd().openFile(self.config_path, .{}) catch {
-                std.time.sleep(1000 * std.time.ns_per_ms); // Sleep 1 second
+                std.Thread.sleep(1000 * std.time.ns_per_ms); // Sleep 1 second
                 continue;
             };
             defer file.close();
-            
+
             const stat = file.stat() catch {
-                std.time.sleep(1000 * std.time.ns_per_ms);
+                std.Thread.sleep(1000 * std.time.ns_per_ms);
                 continue;
             };
-            
+
             if (stat.mtime > last_modified) {
                 last_modified = stat.mtime;
-                
+
                 // Debounce - wait a bit to ensure file write is complete
-                std.time.sleep(500 * std.time.ns_per_ms); // Wait 500ms
-                
+                std.Thread.sleep(500 * std.time.ns_per_ms); // Wait 500ms
+
                 // Reload configuration
                 self.app.reloadConfig(self.config_path) catch |err| {
                     std.log.err("Failed to reload config: {}", .{err});
                 };
             }
-            
+
             // Check every second
-            std.time.sleep(1000 * std.time.ns_per_ms);
+            std.Thread.sleep(1000 * std.time.ns_per_ms);
         }
     }
 };
 
 test "PopshopApp.init" {
     const allocator = std.testing.allocator;
-    
+
     // Create a mock server (would need to implement a test server)
     // This is a placeholder test structure
     var app_config = Config.init(allocator);
     defer app_config.deinit();
-    
+
     // In a real test, we'd create a mock server implementation
     // const server = createMockServer(allocator);
     // var app = PopshopApp.init(allocator, server, app_config);

@@ -82,7 +82,7 @@ pub const Request = struct {
     query: []const u8,
     headers: HeaderMap,
     body: []const u8,
-    
+
     // Arena allocator for this request - automatically cleaned up after response
     arena: std.mem.Allocator,
 
@@ -104,7 +104,7 @@ pub const Response = struct {
     status: Status,
     headers: HeaderMap,
     body: []const u8,
-    
+
     arena: std.mem.Allocator,
 
     pub fn init(arena: std.mem.Allocator, status: Status) Response {
@@ -137,7 +137,7 @@ pub const Response = struct {
 /// Request handler function type
 pub const HandlerFn = *const fn (request: *Request) anyerror!Response;
 
-/// Middleware function type  
+/// Middleware function type
 pub const MiddlewareFn = *const fn (request: *Request, next: HandlerFn) anyerror!Response;
 
 /// Abstract HTTP server interface
@@ -177,14 +177,14 @@ pub const Server = struct {
 pub const ServerConfig = struct {
     host: []const u8 = "127.0.0.1",
     port: u16 = 8080,
-    
+
     // Security settings
     max_request_size: usize = 1024 * 1024, // 1MB
     request_timeout_ms: u64 = 30000, // 30 seconds
     max_header_size: usize = 8 * 1024, // 8KB
     rate_limit_requests: u32 = 100,
     rate_limit_window_ms: u64 = 60000, // 1 minute
-    
+
     // CORS settings
     cors_origins: []const []const u8 = &.{"*"},
     cors_methods: []const []const u8 = &.{ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS" },

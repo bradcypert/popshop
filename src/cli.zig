@@ -104,7 +104,7 @@ pub const CLI = struct {
         }
 
         const config_path = args[0];
-        
+
         std.log.info("Validating configuration file: {s}", .{config_path});
 
         var app_config = Config.loadFromFile(self.allocator, config_path) catch |err| {
@@ -114,12 +114,12 @@ pub const CLI = struct {
         defer app_config.deinit();
 
         const stats = self.analyzeConfig(&app_config);
-        
+
         std.log.info("✓ Configuration is valid", .{});
         std.log.info("  Total rules: {}", .{stats.total_rules});
         std.log.info("  Mock responses: {}", .{stats.mock_rules});
         std.log.info("  Proxy rules: {}", .{stats.proxy_rules});
-        
+
         if (stats.warnings.items.len > 0) {
             std.log.warn("Warnings:", .{});
             for (stats.warnings.items) |warning| {
@@ -175,17 +175,16 @@ pub const CLI = struct {
         // Keep the server running (simplified without signal handling for now)
         // In a production environment, you'd want to implement proper signal handling
         while (true) {
-            std.time.sleep(1000 * std.time.ns_per_ms); // Sleep 1 second
+            std.Thread.sleep(1000 * std.time.ns_per_ms); // Sleep 1 second
         }
     }
 
     fn analyzeConfig(self: *CLI, app_config: *const Config) ConfigStats {
-        
         var stats = ConfigStats{
             .total_rules = app_config.rules.items.len,
             .mock_rules = 0,
             .proxy_rules = 0,
-            .warnings = std.ArrayList([]const u8).init(self.allocator),
+            .warnings = .empty,
         };
 
         for (app_config.rules.items) |rule| {
@@ -195,11 +194,11 @@ pub const CLI = struct {
             if (rule.isProxy()) {
                 stats.proxy_rules += 1;
             }
-            
+
             // Check for potential issues
             if (!rule.isMock() and !rule.isProxy()) {
                 // This would be caught during config loading, but just in case
-                stats.warnings.append("Rule has neither mock response nor proxy config") catch {};
+                stats.warnings.append(self.allocator, "Rule has neither mock response nor proxy config") catch {};
             }
         }
 
